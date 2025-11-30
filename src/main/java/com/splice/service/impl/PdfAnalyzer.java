@@ -1,8 +1,9 @@
-package com.splice.service;
+package com.splice.service.impl;
 
 import com.splice.model.PageContent;
 import com.splice.model.TextContent;
 
+import com.splice.service.DocumentAnalyzer;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
@@ -13,7 +14,7 @@ import java.nio.file.Path;
 import java.util.LinkedList;
 import java.util.List;
 
-public class PdfAnalyzer implements DocumentAnalyzer{
+public class PdfAnalyzer implements DocumentAnalyzer {
     @Override
     public List<PageContent> analyze(Path path) throws IOException {
         List<PageContent> documentContent = new LinkedList<>();
