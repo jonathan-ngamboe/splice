@@ -16,21 +16,19 @@
 ## Key Features
 
 * **Hybrid Extraction:** Automatically detects scanned pages vs. native text.
-    * *Native Text:* Processed locally via PDFBox (Zero cost, \<10ms latency).
+    * *Native Text:* Processed locally via PDFBox (Zero cost, <10ms latency).
     * *Visual/Scanned:* Tagged and routed for OCR/Vision API processing.
 * **Virtual Thread Concurrency:** Built on Java 21 `StructuredTaskScope` to handle thousands of concurrent file I/O operations with minimal memory footprint.
 * **Vector-Ready Output:** Produces normalized JSON compatible with major Vector Databases (Pinecone, Weaviate).
 
-<!-- end list -->
-
 ```mermaid
 graph LR
-    A[PDF Input] --> B{Complexity Analysis}
-    B -- Native Text --> C[Local Parser (Java)]
-    B -- Scanned/Image --> D[OCR Service (API)]
+    A[PDF Input] --> B{"Complexity Analysis"}
+    B -- Native Text --> C["Local Parser (Java)"]
+    B -- Scanned/Image --> D["OCR Service (API)"]
     C --> E[Normalized JSON]
     D --> E
-```
+````
 
 ## Building from Source
 
@@ -42,12 +40,12 @@ graph LR
 <!-- end list -->
 
 ```bash
-git clone https://github.com/your-username/splice.git
+git clone [https://github.com/your-username/splice.git](https://github.com/your-username/splice.git)
 cd splice
 mvn clean package
 ```
 
-*The executable JAR will be generated in the `target/` directory.*
+> The executable JAR will be generated in the `target/` directory.
 
 ## Usage
 
@@ -61,10 +59,10 @@ java -jar target/splice-1.0.jar --input ./data/documents --output ./results.json
 
 | Flag | Description | Default |
 | :--- | :--- | :--- |
-| `-i`, `--input` | Path to source directory or file. | Required |
-| `-o`, `--output` | Path to destination JSON file. | Required |
+| `-i`, `--input` | Path to source directory or file. | **Required** |
+| `-o`, `--output` | Path to destination JSON file. | **Required** |
 | `--threads` | Max concurrent virtual threads. | Auto-detect |
-| `--threshold` | Image/Text ratio to trigger OCR routing. | 0.2 |
+| `--threshold` | Image/Text ratio to trigger OCR routing. | `0.2` |
 
 ### Output Format
 
