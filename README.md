@@ -40,7 +40,7 @@ graph LR
 <!-- end list -->
 
 ```bash
-git clone [https://github.com/your-username/splice.git](https://github.com/your-username/splice.git)
+git clone [https://github.com/jonathan-ngamboe/splice.git](https://github.com/jonathan-ngamboe/splice.git)
 cd splice
 mvn clean package
 ```
