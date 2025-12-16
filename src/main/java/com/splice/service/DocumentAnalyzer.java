@@ -8,4 +8,5 @@ import java.util.List;
 
 public interface DocumentAnalyzer {
     List<PageContent> analyze(Path path) throws IOException;
+    boolean supports(Path path);
 }

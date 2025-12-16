@@ -14,6 +14,12 @@ import java.util.List;
 
 public class PdfAnalyzer implements DocumentAnalyzer {
     @Override
+    public boolean supports(Path path) {
+        String filename = path.getFileName().toString().toLowerCase();
+        return filename.endsWith(".pdf");
+    }
+
+    @Override
     public List<PageContent> analyze(Path path) throws IOException {
         List<PageContent> documentContent = new LinkedList<>();
         var file = path.toFile();

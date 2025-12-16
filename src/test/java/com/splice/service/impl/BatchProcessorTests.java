@@ -2,6 +2,7 @@ package com.splice.service.impl;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.splice.model.PageContent;
 import com.splice.model.TextContent;
 import com.splice.service.DocumentAnalyzer;
 
@@ -18,10 +19,19 @@ public class BatchProcessorTests {
     @TempDir
     Path tempDir;
 
-    DocumentAnalyzer fakeAnalyzer = path -> {
-        if(path.toString().endsWith("crash.pdf"))
-            throw new IOException("Simulated corrupted file");
-        return List.of(new TextContent("Simulated content", 1));
+    DocumentAnalyzer fakeAnalyzer = new DocumentAnalyzer() {
+        @Override
+        public boolean supports(Path path) {
+            return path.toString().endsWith(".pdf");
+        }
+
+        @Override
+        public List<PageContent> analyze(Path path) throws IOException {
+            if (path.toString().endsWith("crash.pdf")) {
+                throw new IOException("Simulated corrupted file");
+            }
+            return List.of(new TextContent("Simulated content", 1));
+        }
     };
 
     private final BatchProcessor processor = new BatchProcessor(fakeAnalyzer);
