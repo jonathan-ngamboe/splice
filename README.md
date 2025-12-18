@@ -101,7 +101,7 @@ Splice produces a normalized JSON structure regardless of the processing path:
 
 - [x] **Core Engine:** PDF parsing and content stream interception.
 - [x] **Smart Detection:** Text vs. Image classification logic.
-- [ ] **Batch Processing:** Virtual Thread implementation for directory scanning.
+- [x] **Batch Processing:** Virtual Thread implementation for directory scanning.
 - [ ] **CLI:** Picocli integration for argument parsing.
 - [ ] **OCR Integration:** Connector for AWS Textract / OpenAI Vision.
 
