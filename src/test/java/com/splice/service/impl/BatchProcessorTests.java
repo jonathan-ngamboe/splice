@@ -42,7 +42,7 @@ public class BatchProcessorTests {
         Files.createFile(tempDir.resolve("doc1.pdf"));
         Files.createFile(tempDir.resolve("doc2.pdf"));
 
-        var results = processor.ingestDirectory(tempDir);
+        var results = processor.ingestDirectory(tempDir, false);
 
         assertEquals(2, results.size(), "Should contain the pages from both files");
     }
@@ -52,7 +52,7 @@ public class BatchProcessorTests {
         Files.createFile(tempDir.resolve("doc1.pdf"));
         Files.createFile(tempDir.resolve("notes.txt"));
 
-        var results = processor.ingestDirectory(tempDir);
+        var results = processor.ingestDirectory(tempDir, false);
 
         assertEquals(1, results.size(), "The .txt file should be ignored.");
     }
@@ -62,7 +62,31 @@ public class BatchProcessorTests {
         Files.createFile(tempDir.resolve("good.pdf"));
         Files.createFile(tempDir.resolve("bad_crash.pdf"));
 
-        var results = processor.ingestDirectory(tempDir);
+        var results = processor.ingestDirectory(tempDir, false);
 
         assertEquals(1, results.size(), "The process should not crash completely; it should recover the correct file.");    }
+
+    @Test
+    public void ingestDirectory_recursiveTrue_shouldProcessSubdirectories() throws IOException {
+        Files.createFile(tempDir.resolve("root_doc.pdf"));
+
+        Path subfolder = Files.createDirectory(tempDir.resolve("subfolder"));
+        Files.createFile(subfolder.resolve("sub_doc.pdf"));
+
+        var results = processor.ingestDirectory(tempDir, true);
+
+        assertEquals(2, results.size(), "Should process files in subfolders when recursive is true");
+    }
+
+    @Test
+    public void ingestDirectory_recursiveFalse_shouldIgnoreSubdirectories() throws IOException {
+        Files.createFile(tempDir.resolve("root_doc.pdf"));
+
+        Path subfolder = Files.createDirectory(tempDir.resolve("subfolder"));
+        Files.createFile(subfolder.resolve("sub_doc.pdf"));
+
+        var results = processor.ingestDirectory(tempDir, false);
+
+        assertEquals(1, results.size(), "Should ONLY process top-level files when recursive is false");
+    }
 }
