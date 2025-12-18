@@ -58,9 +58,10 @@ java -jar target/splice-1.0.jar --input ./data/documents --output ./results.json
 ### Configuration Options
 
 | Flag | Description | Default |
-| :--- | :--- | :--- |
+| --- | --- | --- |
 | `-i`, `--input` | Path to source directory or file. | **Required** |
-| `-o`, `--output` | Path to destination JSON file. | **Required** |
+| `-o`, `--output` | **Directory** where the JSON report and extracted images will be saved. | **Required** |
+| `-r`, `--recursive` | Process subdirectories recursively if input is a directory. | `false` |
 | `--threads` | Max concurrent virtual threads. | Auto-detect |
 | `--threshold` | Image/Text ratio to trigger OCR routing. | `0.2` |
 
