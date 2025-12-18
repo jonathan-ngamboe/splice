@@ -31,12 +31,14 @@ public class BatchProcessor {
      * @param directory The root path to scan.
      * @return A list of all extracted content.
      */
-    public List<PageContent> ingestDirectory(Path directory) {
+    public List<PageContent> ingestDirectory(Path directory, boolean recursive) {
         if (!Files.exists(directory) || !Files.isDirectory(directory)) {
             throw new IllegalArgumentException("Invalid directory path: " + directory);
         }
 
-        try (var stream = Files.walk(directory)) {
+        int maxDepth = recursive ? Integer.MAX_VALUE : 1;
+
+        try (var stream = Files.walk(directory, maxDepth)) {
             List<Path> filesToProcess = stream
                     .filter(Files::isRegularFile)
                     .filter(analyzer::supports)
