@@ -37,6 +37,9 @@ public class JsonResultWriterTests {
 
         String jsonResult = Files.readString(destination);
 
+        assertTrue(jsonResult.contains("\"type\""), "Should contain type key");
+        assertTrue(jsonResult.contains("\"TEXT\""), "Should contain type value");
+
         assertTrue(jsonResult.contains("\"text\""), "Should contain text key");
         assertTrue(jsonResult.contains("Hello World"), "Should contain text value");
 
