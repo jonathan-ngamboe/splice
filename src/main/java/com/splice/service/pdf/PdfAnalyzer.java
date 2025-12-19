@@ -1,9 +1,8 @@
-package com.splice.service.impl;
+package com.splice.service.pdf;
 
 import com.splice.model.PageContent;
 
 import com.splice.service.DocumentAnalyzer;
-import com.splice.service.pdf.PageContentExtractor;
 import org.apache.pdfbox.Loader;
 
 import java.io.IOException;

@@ -1,4 +1,4 @@
-package com.splice.service.impl;
+package com.splice.service.core;
 
 import static org.junit.jupiter.api.Assertions.*;
 

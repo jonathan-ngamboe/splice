@@ -1,7 +1,6 @@
 package com.splice.service.pdf;
 
 import com.splice.model.*;
-import com.splice.util.PdfOperators;
 
 import org.apache.pdfbox.contentstream.operator.Operator;
 import org.apache.pdfbox.cos.COSBase;

@@ -1,8 +1,8 @@
-package com.splice.service.impl;
+package com.splice.service.core;
 
 import com.splice.model.PageContent;
-import com.splice.service.DocumentAnalyzer;
 
+import com.splice.service.DocumentAnalyzer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
