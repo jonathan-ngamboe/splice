@@ -26,10 +26,12 @@ public class BatchProcessor {
     }
 
     /**
-     * Ingests all PDF files in the given directory.
+     * Ingests documents from the specified directory.
      *
-     * @param directory The root path to scan.
-     * @return A list of all extracted content.
+     * @param directory The root path containing the documents to process.
+     * @param recursive {@code true} to include subdirectories; {@code false} to process only the top-level directory.
+     * @return A list of extracted content from all processed files.
+     * @throws RuntimeException If an I/O error occurs during file traversal.
      */
     public List<PageContent> ingestDirectory(Path directory, boolean recursive) {
         if (!Files.exists(directory) || !Files.isDirectory(directory)) {
