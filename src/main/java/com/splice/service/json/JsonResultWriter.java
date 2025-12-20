@@ -8,11 +8,15 @@ import tools.jackson.databind.SerializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.core.type.TypeReference;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 public class JsonResultWriter implements ResultWriter {
+    private static final String DEFAULT_NAME = "splice_report";
     private final ObjectMapper mapper;
 
     public JsonResultWriter() {
@@ -23,7 +27,15 @@ public class JsonResultWriter implements ResultWriter {
 
     @Override
     public void write(List<PageContent> content, Path destination) {
+        Path finalFile = destination;
+
+        if(Files.isDirectory(destination)) {
+            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+            String filename = "splice_report_" + timestamp + ".json";
+            finalFile = destination.resolve(filename);
+        }
+
         mapper.writerFor(new TypeReference<List<PageContent>>() {})
-                .writeValue(destination.toFile(), content);
+                .writeValue(finalFile.toFile(), content);
     }
 }
