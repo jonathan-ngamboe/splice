@@ -22,9 +22,9 @@ public class SpliceCommand implements Callable<Integer> {
     private Path input;
 
     @CommandLine.Option(names = {"-o", "--output"},
-            description = "Directory where the report and extracted images will be saved.",
+            description = "File or directory where the report and extracted images will be saved.",
             required = true)
-    private Path outputDir;
+    private Path output;
 
     @CommandLine.Option(names = {"-r", "--recursive"},
             description = "Process subdirectories recursively if input is a directory.")
@@ -38,10 +38,10 @@ public class SpliceCommand implements Callable<Integer> {
 
         var content = processor.ingestDirectory(input, recursive);
 
-        if (!Files.exists(outputDir)) {
-            Files.createDirectories(outputDir);
+        if (!Files.exists(output)) {
+            Files.createDirectories(output);
         }
-        writer.write(content, outputDir);
+        writer.write(content, output);
 
         return 0;
     }
