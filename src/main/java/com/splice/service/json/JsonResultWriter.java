@@ -13,6 +13,7 @@ import java.nio.file.Path;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+
 import java.util.List;
 
 public class JsonResultWriter implements ResultWriter {
@@ -31,7 +32,7 @@ public class JsonResultWriter implements ResultWriter {
 
         if(Files.isDirectory(destination)) {
             String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-            String filename = "splice_report_" + timestamp + ".json";
+            String filename = DEFAULT_NAME + "_" + timestamp + ".json";
             finalFile = destination.resolve(filename);
         }
 
