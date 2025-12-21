@@ -6,7 +6,6 @@ import com.splice.service.pdf.PdfAnalyzer;
 
 import picocli.CommandLine;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 
 import java.util.concurrent.Callable;
@@ -33,15 +32,10 @@ public class SpliceCommand implements Callable<Integer> {
     @Override
     public Integer call() throws Exception {
         var analyzer = new PdfAnalyzer();
-        var processor = new BatchProcessor(analyzer);
         var writer = new JsonResultWriter();
+        var processor = new BatchProcessor(analyzer, writer);
 
-        var content = processor.ingestDirectory(input, recursive);
-
-        if (!Files.exists(output)) {
-            Files.createDirectories(output);
-        }
-        writer.write(content, output);
+        processor.process(input, output, recursive);
 
         return 0;
     }
