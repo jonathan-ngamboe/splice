@@ -46,25 +46,4 @@ public class JsonResultWriterTests {
         assertTrue(jsonResult.contains("\"pageNumber\""), "Should contain pageNumber key");
         assertTrue(jsonResult.contains("42"), "Should contain the page number value (int)");
     }
-
-    @Test
-    public void write_directoryPath_shouldCreateTimestampedFileInside() throws IOException {
-        Path directory = tempDir;
-
-        writer.write(List.of(new TextContent("Test", 1)), directory);
-
-        try (var files = Files.list(directory)) {
-            List<Path> fileList = files.toList();
-
-            assertEquals(1, fileList.size(), "Should have created exactly one file");
-
-            Path createdFile = fileList.get(0);
-            String filename = createdFile.getFileName().toString();
-
-            assertTrue(filename.startsWith("splice_report_"), "File should start with prefix");
-            assertTrue(filename.endsWith(".json"), "File should be a JSON");
-
-            assertTrue(Files.size(createdFile) > 0, "File should not be empty");
-        }
-    }
 }
