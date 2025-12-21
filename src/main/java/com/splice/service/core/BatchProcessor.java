@@ -1,8 +1,10 @@
 package com.splice.service.core;
 
+import com.splice.io.PathResolver;
 import com.splice.model.PageContent;
-
 import com.splice.service.DocumentAnalyzer;
+import com.splice.service.ResultWriter;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -10,109 +12,110 @@ import org.slf4j.MDC;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.*;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class BatchProcessor {
 
     private static final Logger logger = LoggerFactory.getLogger(BatchProcessor.class);
-    private final DocumentAnalyzer analyzer;
 
-    public BatchProcessor(DocumentAnalyzer analyzer) {
+    private final DocumentAnalyzer analyzer;
+    private final ResultWriter writer;
+    private final PathResolver pathResolver;
+
+    public BatchProcessor(DocumentAnalyzer analyzer, ResultWriter writer) {
+        this(analyzer, writer, new PathResolver());
+    }
+
+    public BatchProcessor(DocumentAnalyzer analyzer, ResultWriter writer, PathResolver pathResolver) {
         this.analyzer = analyzer;
+        this.writer = writer;
+        this.pathResolver = pathResolver;
     }
 
     /**
-     * Ingests documents from the specified directory.
+     * Ingests documents from the specified directory using a streaming approach.
+     * Files are processed concurrently, and results are written immediately to disk to save memory.
      *
-     * @param directory The root path containing the documents to process.
-     * @param recursive {@code true} to include subdirectories; {@code false} to process only the top-level directory.
-     * @return A list of extracted content from all processed files.
-     * @throws RuntimeException If an I/O error occurs during file traversal.
+     * @param inputDirectory  The root path containing the documents to process.
+     * @param outputDirectory The directory where JSON reports will be saved.
+     * @param recursive       {@code true} to include subdirectories; {@code false} to process only the top-level directory.
+     * @throws RuntimeException If an I/O error occurs during file traversal or directory creation.
      */
-    public List<PageContent> ingestDirectory(Path directory, boolean recursive) {
-        if (!Files.exists(directory) || !Files.isDirectory(directory)) {
-            throw new IllegalArgumentException("Invalid directory path: " + directory);
-        }
+    public void process(Path inputDirectory, Path outputDirectory, boolean recursive) {
+        validateInputs(inputDirectory, outputDirectory);
 
         int maxDepth = recursive ? Integer.MAX_VALUE : 1;
+        AtomicInteger totalPages = new AtomicInteger(0);
 
-        try (var stream = Files.walk(directory, maxDepth)) {
+        try (var stream = Files.walk(inputDirectory, maxDepth);
+             var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+
             List<Path> filesToProcess = stream
                     .filter(Files::isRegularFile)
                     .filter(analyzer::supports)
                     .toList();
 
             if (filesToProcess.isEmpty()) {
-                logger.info("No supported files found in directory: {}", directory);
-                return Collections.emptyList();
+                logger.info("No supported files found in: {}", inputDirectory);
+                return;
             }
 
-            logger.info("Starting analysis. Directory: {}, Files: {}", directory, filesToProcess.size());
+            logger.info("Batch started. Files: {}", filesToProcess.size());
 
-            return processFiles(filesToProcess);
-
-        } catch (IOException e) {
-            logger.error("Fatal error scanning directory: {}", directory, e);
-            throw new RuntimeException("Directory scanning failed", e);
-        }
-    }
-
-    private List<PageContent> processFiles(List<Path> files) {
-        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
-
-            var tasks = files.stream()
-                    .map(file -> (Callable<List<PageContent>>) () -> processSingleFile(file))
+            var tasks = filesToProcess.stream()
+                    .map(file -> (Callable<Void>) () -> {
+                        int count = processSingleFile(file, outputDirectory);
+                        totalPages.addAndGet(count);
+                        return null;
+                    })
                     .toList();
 
-            List<Future<List<PageContent>>> futures = executor.invokeAll(tasks);
+            executor.invokeAll(tasks);
 
-            return aggregateResults(futures);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            logger.error("Batch processing was interrupted during execution", e);
-            return Collections.emptyList();
+            logger.info("Batch completed. Pages processed: {}", totalPages.get());
+
+        } catch (IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            logger.error("Processing failed", e);
+            throw new RuntimeException("Batch processing failed", e);
         }
     }
 
-    private List<PageContent> processSingleFile(Path file) {
+    private int processSingleFile(Path inputFile, Path outputDirectory) {
         try {
-            MDC.put("file_name", file.getFileName().toString());
-            MDC.put("file_size", String.valueOf(Files.size(file)));
-
-            logger.debug("Start processing file");
-
+            MDC.put("file", inputFile.getFileName().toString());
             long start = System.currentTimeMillis();
-            List<PageContent> result = analyzer.analyze(file);
 
-            logger.debug("Finished file: {} in {}ms", file.getFileName(), System.currentTimeMillis() - start);
-            return result;
+            List<PageContent> result = analyzer.analyze(inputFile);
+
+            Path targetFile = pathResolver.resolveUniquePath(
+                    outputDirectory,
+                    inputFile.getFileName().toString(),
+                    writer.extension()
+            );
+
+            writer.write(result, targetFile);
+
+            logger.debug("Processed in {}ms -> {}", System.currentTimeMillis() - start, targetFile.getFileName());
+            return result.size();
+
         } catch (Exception e) {
-            logger.error("Failed to analyze file at path: {}", file.toAbsolutePath(), e);
-            return Collections.emptyList();
+            logger.error("Failed to process file", e);
+            return 0;
         } finally {
             MDC.clear();
         }
     }
 
-    private List<PageContent> aggregateResults(List<Future<List<PageContent>>> futures) {
-        List<PageContent> results = new ArrayList<>();
-
-        for (var future : futures) {
-            try {
-                results.addAll(future.get());
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                logger.warn("Aggregation interrupted");
-            } catch (ExecutionException e) {
-                logger.error("Unexpected error in concurrent task", e.getCause());
-            }
+    private void validateInputs(Path input, Path output) {
+        if (!Files.isDirectory(input)) throw new IllegalArgumentException("Invalid input: " + input);
+        try {
+            Files.createDirectories(output);
+        } catch (IOException e) {
+            throw new RuntimeException("Cannot create output: " + output, e);
         }
-
-        logger.info("Batch completed. Total pages extracted: {}", results.size());
-        return results;
     }
 }
