@@ -1,92 +1,117 @@
 package com.splice.service.core;
 
-import static org.junit.jupiter.api.Assertions.*;
-
 import com.splice.model.PageContent;
 import com.splice.model.TextContent;
 import com.splice.service.DocumentAnalyzer;
-
+import com.splice.service.ResultWriter;
+import com.splice.service.json.JsonResultWriter;
+import com.splice.service.pdf.PdfAnalyzer;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-
 import java.util.List;
+
+import static org.mockito.Mockito.*;
 
 public class BatchProcessorTests {
     @TempDir
     Path tempDir;
 
-    DocumentAnalyzer fakeAnalyzer = new DocumentAnalyzer() {
-        @Override
-        public boolean supports(Path path) {
-            return path.toString().endsWith(".pdf");
-        }
+    private final DocumentAnalyzer mockAnalyzer = mock(PdfAnalyzer.class);
+    private final ResultWriter mockWriter = mock(JsonResultWriter.class);
+    private final BatchProcessor processor = new BatchProcessor(mockAnalyzer, mockWriter);
 
-        @Override
-        public List<PageContent> analyze(Path path) throws IOException {
-            if (path.toString().endsWith("crash.pdf")) {
-                throw new IOException("Simulated corrupted file");
-            }
-            return List.of(new TextContent("Simulated content", 1));
-        }
-    };
+    private static final List<PageContent> DEFAULT_CONTENT = List.of(new TextContent("Default", 1));
 
-    private final BatchProcessor processor = new BatchProcessor(fakeAnalyzer);
-
+    @BeforeEach
+    void setup() {
+        lenient().when(mockWriter.extension()).thenReturn(".json");
+    }
 
     @Test
-    public void ingestDirectory_validPdfOnly_shouldAggregateResults() throws IOException {
+    public void process_validPdfOnly_shouldCallWriterWithSpecificJsonPaths() throws IOException {
         Files.createFile(tempDir.resolve("doc1.pdf"));
         Files.createFile(tempDir.resolve("doc2.pdf"));
 
-        var results = processor.ingestDirectory(tempDir, false);
+        when(mockAnalyzer.supports(any(Path.class))).thenReturn(true);
+        when(mockAnalyzer.analyze(any(Path.class))).thenReturn(DEFAULT_CONTENT);
 
-        assertEquals(2, results.size(), "Should contain the pages from both files");
+        processor.process(tempDir, tempDir, false);
+
+        verify(mockWriter).write(eq(DEFAULT_CONTENT), eq(tempDir.resolve("doc1.json")));
+        verify(mockWriter).write(eq(DEFAULT_CONTENT), eq(tempDir.resolve("doc2.json")));
     }
 
     @Test
-    public void ingestDirectory_mixedFiles_shouldIgnoreNonPdf() throws IOException {
-        Files.createFile(tempDir.resolve("doc1.pdf"));
-        Files.createFile(tempDir.resolve("notes.txt"));
+    public void process_mixedFiles_shouldIgnoreNonPdf() throws IOException {
+        var pdfFile = Files.createFile(tempDir.resolve("doc1.pdf"));
+        var txtFile = Files.createFile(tempDir.resolve("notes.txt"));
 
-        var results = processor.ingestDirectory(tempDir, false);
+        when(mockAnalyzer.supports(pdfFile)).thenReturn(true);
+        when(mockAnalyzer.supports(txtFile)).thenReturn(false);
+        when(mockAnalyzer.analyze(pdfFile)).thenReturn(DEFAULT_CONTENT);
 
-        assertEquals(1, results.size(), "The .txt file should be ignored.");
+        processor.process(tempDir, tempDir, false);
+
+        verify(mockWriter).write(eq(DEFAULT_CONTENT), eq(tempDir.resolve("doc1.json")));
+
+        verify(mockWriter, never()).write(any(), eq(tempDir.resolve("notes.json")));
     }
 
     @Test
-    public void ingestDirectory_corruptedFile_shouldContinueProcessingOthers() throws IOException {
-        Files.createFile(tempDir.resolve("good.pdf"));
-        Files.createFile(tempDir.resolve("bad_crash.pdf"));
+    public void process_corruptedFile_shouldContinueProcessingOthers() throws IOException {
+        var goodPdf = Files.createFile(tempDir.resolve("good.pdf"));
+        var badPdf  = Files.createFile(tempDir.resolve("bad_crash.pdf"));
 
-        var results = processor.ingestDirectory(tempDir, false);
+        when(mockAnalyzer.supports(badPdf)).thenReturn(true);
+        when(mockAnalyzer.analyze(badPdf)).thenThrow(new IOException("Simulated corrupted file"));
 
-        assertEquals(1, results.size(), "The process should not crash completely; it should recover the correct file.");    }
+        when(mockAnalyzer.supports(goodPdf)).thenReturn(true);
+        when(mockAnalyzer.analyze(goodPdf)).thenReturn(DEFAULT_CONTENT);
+
+        processor.process(tempDir, tempDir, false);
+
+        verify(mockWriter).write(eq(DEFAULT_CONTENT), eq(tempDir.resolve("good.json")));
+    }
 
     @Test
-    public void ingestDirectory_recursiveTrue_shouldProcessSubdirectories() throws IOException {
+    public void process_recursiveTrue_shouldProcessSubdirectories() throws IOException {
         Files.createFile(tempDir.resolve("root_doc.pdf"));
-
         Path subfolder = Files.createDirectory(tempDir.resolve("subfolder"));
         Files.createFile(subfolder.resolve("sub_doc.pdf"));
 
-        var results = processor.ingestDirectory(tempDir, true);
+        when(mockAnalyzer.supports(any(Path.class))).thenReturn(true);
+        when(mockAnalyzer.analyze(any(Path.class))).thenReturn(DEFAULT_CONTENT);
 
-        assertEquals(2, results.size(), "Should process files in subfolders when recursive is true");
+        processor.process(tempDir, tempDir, true);
+
+        Path expectedRootOutput = tempDir.resolve("root_doc.json");
+
+        Path expectedSubOutput = tempDir.resolve("sub_doc.json");
+
+        verify(mockWriter).write(eq(DEFAULT_CONTENT), eq(expectedRootOutput));
+        verify(mockWriter).write(eq(DEFAULT_CONTENT), eq(expectedSubOutput));
     }
 
     @Test
-    public void ingestDirectory_recursiveFalse_shouldIgnoreSubdirectories() throws IOException {
+    public void process_recursiveFalse_shouldIgnoreSubdirectories() throws IOException {
         Files.createFile(tempDir.resolve("root_doc.pdf"));
-
         Path subfolder = Files.createDirectory(tempDir.resolve("subfolder"));
         Files.createFile(subfolder.resolve("sub_doc.pdf"));
 
-        var results = processor.ingestDirectory(tempDir, false);
+        when(mockAnalyzer.supports(any(Path.class))).thenReturn(true);
+        when(mockAnalyzer.analyze(any(Path.class))).thenReturn(DEFAULT_CONTENT);
 
-        assertEquals(1, results.size(), "Should ONLY process top-level files when recursive is false");
+        processor.process(tempDir, tempDir, false);
+
+        Path expectedRootOutput = tempDir.resolve("root_doc.json");
+
+        verify(mockWriter).write(eq(DEFAULT_CONTENT), eq(expectedRootOutput));
+
+        verify(mockWriter, never()).write(any(), eq(tempDir.resolve("sub_doc.json")));
     }
 }
