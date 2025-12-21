@@ -8,4 +8,5 @@ import java.util.List;
 
 public interface ResultWriter {
     public void write(List<PageContent> results, Path destination);
+    public String extension();
 }
