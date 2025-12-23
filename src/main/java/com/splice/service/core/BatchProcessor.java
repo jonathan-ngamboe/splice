@@ -1,7 +1,7 @@
 package com.splice.service.core;
 
 import com.splice.io.PathResolver;
-import com.splice.model.PageContent;
+import com.splice.model.IngestedDocument;
 import com.splice.service.DocumentAnalyzer;
 import com.splice.service.ResultWriter;
 
@@ -89,7 +89,7 @@ public class BatchProcessor {
             MDC.put("file", inputFile.getFileName().toString());
             long start = System.currentTimeMillis();
 
-            List<PageContent> result = analyzer.analyze(inputFile);
+            IngestedDocument result = analyzer.analyze(inputFile);
 
             Path targetFile = pathResolver.resolveUniquePath(
                     outputDirectory,
@@ -100,7 +100,7 @@ public class BatchProcessor {
             writer.write(result, targetFile);
 
             logger.debug("Processed in {}ms -> {}", System.currentTimeMillis() - start, targetFile.getFileName());
-            return result.size();
+            return result.metadata().totalPages();
 
         } catch (Exception e) {
             logger.error("Failed to process file", e);

@@ -1,12 +1,10 @@
 package com.splice.service;
 
-import com.splice.model.PageContent;
+import com.splice.model.IngestedDocument;
 
 import java.nio.file.Path;
 
-import java.util.List;
-
 public interface ResultWriter {
-    public void write(List<PageContent> results, Path destination);
-    public String extension();
+    void write(IngestedDocument results, Path destination);
+    String extension();
 }
