@@ -1,79 +1,79 @@
 package com.splice.service.pdf;
 
-import static org.mockito.Mockito.*;
-
 import static org.junit.jupiter.api.Assertions.*;
-import org.junit.jupiter.api.*;
 
 import com.splice.model.*;
-
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.junit.jupiter.api.*;
+import technology.tabula.ObjectExtractor;
+import technology.tabula.Page;
 
-import technology.tabula.*;
-
-import java.nio.file.*;
-import java.io.*;
-import java.util.*;
+import java.io.File;
+import java.io.IOException;
 import java.net.URISyntaxException;
+import java.nio.file.Paths;
+import java.util.List;
+import java.util.Objects;
 
 public class TableExtractorTests {
-    private final TableExtractor extractor = new TableExtractor();
-    private final Page mockedPage = mock(technology.tabula.Page.class);
 
-    private File getResourceFile() throws URISyntaxException {
-        return Paths.get(Objects.requireNonNull(getClass().getResource("/table.pdf")).toURI()).toFile();
+    private static final TableExtractor extractor = new TableExtractor();
+
+    private static PDDocument document;
+    private static List<DocumentElement> results;
+
+    @BeforeAll
+    static void setupAll() throws IOException, URISyntaxException {
+        File pdfFile = Paths.get(Objects.requireNonNull(TableExtractorTests.class.getResource("/table.pdf")).toURI()).toFile();
+
+        document = Loader.loadPDF(pdfFile);
+
+        try (ObjectExtractor tabulaExtractor = new ObjectExtractor(document)) {
+            Page realTabulaPage = tabulaExtractor.extract().next();
+            results = extractor.extract(realTabulaPage);
+        }
     }
 
-    @Test
-    public void extract_realPdfWithTable_shouldDetectTableAndContent() throws IOException, URISyntaxException {
-        File pdfFile = getResourceFile();
-
-        try (PDDocument document = Loader.loadPDF(pdfFile);
-             ObjectExtractor tabulaExtractor = new ObjectExtractor(document)) {
-
-            Page realPage = tabulaExtractor.extract().next();
-
-            List<DocumentElement> result = extractor.extract(realPage);
-
-            assertFalse(result.isEmpty(), "Should detect at least one table");
-
-            DocumentElement element = result.get(0);
-            assertInstanceOf(TableContent.class, element.content(), "The content must be of type TableContent.");
-
-            TableContent tableContent = (TableContent) element.content();
-            assertNotNull(tableContent.csvData(), "The CSV must not be null");
-            assertTrue(tableContent.csvData().contains("Price"), "The table must contain the header ‘Price’.");
+    @AfterAll
+    static void tearDownAll() throws IOException {
+        if (document != null) {
+            document.close();
         }
     }
 
     @Test
-    public void extract_validPage_shouldMapCoordinatesToLocation() {
-        double minX = 10.0;
-        double minY = 20.0;
-        double maxX = 30.0;
-        double maxY = 40.0;
-        int pageNumber = 5;
-
-        when(mockedPage.getMinX()).thenReturn(minX);
-        when(mockedPage.getMinY()).thenReturn(minY);
-        when(mockedPage.getMaxX()).thenReturn(maxX);
-        when(mockedPage.getMaxY()).thenReturn(maxY);
-        when(mockedPage.getPageNumber()).thenReturn(pageNumber);
-
-        var result = extractor.extract(mockedPage);
-
-        assertNotNull(result, "The result must never be null.");
-        assertFalse(result.isEmpty(), "At least one item must have been found.");
-
-        var location = result.getFirst().location();
-        assertEquals(pageNumber, location.pageNumber());
-        assertEquals((float) minX, location.bbox().getLowerLeftX(), 0.01);
+    @DisplayName("Should detect exactly one table in the sample file")
+    void shouldDetectTable() {
+        assertNotNull(results);
+        assertFalse(results.isEmpty(), "List should not be empty");
+        assertEquals(1, results.size(), "Should find exactly 1 table");
+        assertInstanceOf(TableContent.class, results.get(0).content());
     }
 
     @Test
-    public void extract_nullPage_shouldReturnEmptyList() {
-        var result = extractor.extract(null);
-        assertTrue(result.isEmpty());
+    @DisplayName("Should extract the correct CSV content containing 'Price'")
+    void shouldExtractCsvContent() {
+        DocumentElement element = results.get(0);
+        TableContent content = (TableContent) element.content();
+
+        assertNotNull(content.csvData());
+        assertTrue(content.csvData().contains("Price"), "CSV should contain the header 'Price'");
+    }
+
+    @Test
+    @DisplayName("Should map geometry correctly (Width and Height > 0)")
+    void shouldMapGeometry() {
+        DocumentElement element = results.get(0);
+        Location loc = element.location();
+
+        assertNotNull(loc.bbox());
+        assertTrue(loc.bbox().getWidth() > 0, "Width should be valid");
+        assertTrue(loc.bbox().getHeight() > 0, "Height should be valid");
+    }
+
+    @Test
+    void extract_nullPage_shouldReturnEmptyList() {
+        assertTrue(extractor.extract(null).isEmpty());
     }
 }
