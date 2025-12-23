@@ -1,4 +1,4 @@
 package com.splice.model;
 
-public record ImageContent(byte[] data, int pageNumber) implements PageContent {
+public record ImageContent(String imagePath, String caption) implements PageContent {
 }

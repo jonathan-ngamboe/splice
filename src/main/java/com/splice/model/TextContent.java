@@ -1,4 +1,4 @@
 package com.splice.model;
 
-public record TextContent(String text, int pageNumber) implements PageContent {
+public record TextContent(String text) implements PageContent {
 }
