@@ -1,6 +1,6 @@
 package com.splice.model;
 
-import org.apache.fontbox.util.BoundingBox;
+import com.splice.geometry.BoundingBox;
 
 public record Location(
     int pageNumber,

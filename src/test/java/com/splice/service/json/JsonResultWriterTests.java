@@ -1,16 +1,15 @@
 package com.splice.service.json;
 
+import com.splice.geometry.BoundingBox;
 import com.splice.model.*;
-import org.apache.fontbox.util.BoundingBox;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
+
+import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
+
+import tools.jackson.databind.*;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.nio.file.*;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;

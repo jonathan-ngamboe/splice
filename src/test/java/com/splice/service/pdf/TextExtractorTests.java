@@ -8,7 +8,7 @@ import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.junit.jupiter.api.*;
 
-import java.awt.Rectangle;
+import java.awt.geom.Rectangle2D;
 import java.io.IOException;
 import java.util.List;
 
@@ -43,7 +43,7 @@ class TextExtractorTests {
             writeText(document, page, "Important Text", 50, 700);
             writeText(document, page, "Secret Data", 50, 100);
 
-            List<Rectangle> exclusions = List.of(new Rectangle(0, 0, 200, 200));
+            List<Rectangle2D.Float> exclusions = List.of(new Rectangle2D.Float(0, 0, 200, 200));
 
             var results = extractor.extract(page, exclusions);
 

@@ -38,9 +38,9 @@ class ImageExtractorTests {
             var element = results.getFirst();
             var location = element.location().bbox();
 
-            assertEquals(50, location.getLowerLeftX(), 0.1, "X coordinate mismatch");
-            assertEquals(100, location.getLowerLeftY(), 0.1, "Y coordinate mismatch");
-            assertEquals(100, location.getWidth(), 0.1, "Width mismatch");
+            assertEquals(50, location.x(), 0.1, "X coordinate mismatch");
+            assertEquals(100, location.y(), 0.1, "Y coordinate mismatch");
+            assertEquals(100, location.width(), 0.1, "Width mismatch");
 
             assertInstanceOf(ImageContent.class, element.content());
         }
@@ -62,7 +62,7 @@ class ImageExtractorTests {
             var results = extractor.extract(page);
 
             assertEquals(1, results.size(), "Should verify filtering logic (ignore < 10px)");
-            assertEquals(100, results.getFirst().location().bbox().getLowerLeftX(), 0.1);
+            assertEquals(100, results.getFirst().location().bbox().x(), 0.1);
         }
     }
 

@@ -48,13 +48,13 @@ public class TableExtractorTests {
         assertNotNull(results);
         assertFalse(results.isEmpty(), "List should not be empty");
         assertEquals(1, results.size(), "Should find exactly 1 table");
-        assertInstanceOf(TableContent.class, results.get(0).content());
+        assertInstanceOf(TableContent.class, results.getFirst().content());
     }
 
     @Test
     @DisplayName("Should extract the correct CSV content containing 'Price'")
     void shouldExtractCsvContent() {
-        DocumentElement element = results.get(0);
+        DocumentElement element = results.getFirst();
         TableContent content = (TableContent) element.content();
 
         assertNotNull(content.csvData());
@@ -64,12 +64,12 @@ public class TableExtractorTests {
     @Test
     @DisplayName("Should map geometry correctly (Width and Height > 0)")
     void shouldMapGeometry() {
-        DocumentElement element = results.get(0);
+        DocumentElement element = results.getFirst();
         Location loc = element.location();
 
         assertNotNull(loc.bbox());
-        assertTrue(loc.bbox().getWidth() > 0, "Width should be valid");
-        assertTrue(loc.bbox().getHeight() > 0, "Height should be valid");
+        assertTrue(loc.bbox().width() > 0, "Width should be valid");
+        assertTrue(loc.bbox().height() > 0, "Height should be valid");
     }
 
     @Test
