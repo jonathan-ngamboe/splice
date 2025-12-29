@@ -15,15 +15,17 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 class TextExtractorTests {
-    private final TextExtractor extractor = new TextExtractor();
+    private final TextExtractor extractor;
+
+    TextExtractorTests() {
+        this.extractor = new TextExtractor();
+    }
 
     @Test
     @DisplayName("Should extract simple text content from a generated PDF page")
     void shouldExtractTextFromSimplePage() throws IOException {
         try (PDDocument document = createInMemoryDocument("Hello World", 50, 700)) {
-            PDPage page = document.getPage(0);
-
-            var results = extractor.extract(page);
+            var results = extractor.extract(document, 1);
 
             assertAll("Basic extraction check",
                     () -> assertFalse(results.isEmpty(), "Should return at least one element"),
@@ -40,18 +42,21 @@ class TextExtractorTests {
             PDPage page = new PDPage();
             document.addPage(page);
 
-            writeText(document, page, "Important Text", 50, 700);
-            writeText(document, page, "Secret Data", 50, 100);
+            writeText(document, page, "Secret Data", 50, 750);
 
-            List<Rectangle2D.Float> exclusions = List.of(new Rectangle2D.Float(0, 0, 200, 200));
+            writeText(document, page, "Public Info", 50, 100);
 
-            var results = extractor.extract(page, exclusions);
+            List<Rectangle2D.Float> exclusions = List.of(new Rectangle2D.Float(0, 0, 500, 200));
 
-            String extractedText = ((TextContent) results.getFirst().content()).text();
+            var results = extractor.extract(document, 1, exclusions);
+
+            String fullExtractedText = results.stream()
+                    .map(el -> ((TextContent) el.content()).text())
+                    .reduce("", (a, b) -> a + " " + b);
 
             assertAll("Exclusion zone check",
-                    () -> assertTrue(extractedText.contains("Important Text"), "Should keep the main text"),
-                    () -> assertFalse(extractedText.contains("Secret Data"), "Should have removed the secret data")
+                    () -> assertTrue(fullExtractedText.contains("Public Info"), "Should keep the text outside the zone"),
+                    () -> assertFalse(fullExtractedText.contains("Secret Data"), "Should have removed the text inside the zone")
             );
         }
     }
@@ -60,9 +65,7 @@ class TextExtractorTests {
     @DisplayName("Should handle null exclusion list safely (treat as empty)")
     void shouldExtractEverythingWhenExclusionsAreNull() throws IOException {
         try (PDDocument document = createInMemoryDocument("Test Content", 50, 700)) {
-            PDPage page = document.getPage(0);
-
-            var results = extractor.extract(page, null);
+            var results = extractor.extract(document, 1);
 
             assertFalse(results.isEmpty());
             assertTrue(((TextContent) results.getFirst().content()).text().contains("Test Content"));
@@ -70,23 +73,26 @@ class TextExtractorTests {
     }
 
     @Test
-    @DisplayName("Should return empty list or empty text for a completely blank page")
+    @DisplayName("Should return empty list for a completely blank page")
     void shouldReturnEmptyForBlankPage() throws IOException {
         try (PDDocument document = new PDDocument()) {
             document.addPage(new PDPage());
 
-            var results = extractor.extract(document.getPage(0));
+            var results = extractor.extract(document, 1);
 
-            assertTrue(results.isEmpty() || ((TextContent)results.getFirst().content()).text().isBlank());
+            boolean contentIsEmpty = results.isEmpty() ||
+                    results.stream().allMatch(el -> ((TextContent)el.content()).text().isBlank());
+
+            assertTrue(contentIsEmpty, "Should return no meaningful content for blank page");
         }
     }
 
     @Test
-    @DisplayName("Should return empty list when input page is null")
-    void shouldReturnEmptyListWhenPageIsNull() {
-        var results = extractor.extract(null);
-        assertNotNull(results);
-        assertTrue(results.isEmpty());
+    @DisplayName("Should throw exception or return empty if page index is invalid")
+    void shouldFailGracefullyOnInvalidPage() throws IOException {
+        try (PDDocument document = createInMemoryDocument("Test", 50, 50)) {
+            assertThrows(RuntimeException.class, () -> extractor.extract(document, 99));
+        }
     }
 
     private PDDocument createInMemoryDocument(String text, float x, float y) throws IOException {
