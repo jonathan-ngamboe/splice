@@ -11,7 +11,6 @@ import java.util.HexFormat;
 
 public interface DocumentExtractor {
     IngestedDocument extract(Path path) throws IOException;
-    boolean supports(Path path);
 
     default String calculateFileHash(Path path) {
         try (InputStream is = Files.newInputStream(path)) {

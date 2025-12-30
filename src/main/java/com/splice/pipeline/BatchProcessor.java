@@ -1,6 +1,9 @@
 package com.splice.pipeline;
 
+import com.splice.extraction.pdf.PdfExtractor;
+import com.splice.extraction.spi.ExtractorProvider;
 import com.splice.io.PathResolver;
+import com.splice.io.fs.LocalAssetStorage;
 import com.splice.model.document.IngestedDocument;
 import com.splice.extraction.DocumentExtractor;
 import com.splice.io.ResultWriter;
@@ -16,50 +19,51 @@ import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 
 public class BatchProcessor {
 
     private static final Logger logger = LoggerFactory.getLogger(BatchProcessor.class);
 
-    private final DocumentExtractor analyzer;
     private final ResultWriter writer;
     private final PathResolver pathResolver;
+    private final List<ExtractorProvider> providers;
 
-    public BatchProcessor(DocumentExtractor analyzer, ResultWriter writer) {
-        this(analyzer, writer, new PathResolver());
+    public BatchProcessor(ResultWriter writer, List<ExtractorProvider> providers) {
+        this(writer, new PathResolver(), providers);
     }
 
-    public BatchProcessor(DocumentExtractor analyzer, ResultWriter writer, PathResolver pathResolver) {
-        this.analyzer = analyzer;
+    public BatchProcessor(ResultWriter writer, PathResolver pathResolver, List<ExtractorProvider> providers) {
         this.writer = writer;
         this.pathResolver = pathResolver;
+        this.providers = providers;
     }
 
     /**
      * Ingests documents from the specified directory using a streaming approach.
      * Files are processed concurrently, and results are written immediately to disk to save memory.
      *
-     * @param inputDirectory  The root path containing the documents to process.
-     * @param outputDirectory The directory where JSON reports will be saved.
+     * @param inputRoot  The root path containing the documents to process.
+     * @param outputRoot The directory where JSON reports will be saved.
      * @param recursive       {@code true} to include subdirectories; {@code false} to process only the top-level directory.
      * @throws RuntimeException If an I/O error occurs during file traversal or directory creation.
      */
-    public void process(Path inputDirectory, Path outputDirectory, boolean recursive) {
-        validateInputs(inputDirectory, outputDirectory);
+    public void process(Path inputRoot, Path outputRoot, boolean recursive) {
+        validateInputs(inputRoot, outputRoot);
 
         int maxDepth = recursive ? Integer.MAX_VALUE : 1;
         AtomicInteger totalPages = new AtomicInteger(0);
 
-        try (var stream = Files.walk(inputDirectory, maxDepth);
+        try (Stream<Path> stream = Files.walk(inputRoot, maxDepth);
              var executor = Executors.newVirtualThreadPerTaskExecutor()) {
 
             List<Path> filesToProcess = stream
                     .filter(Files::isRegularFile)
-                    .filter(analyzer::supports)
+                    .filter(this::isSupported)
                     .toList();
 
             if (filesToProcess.isEmpty()) {
-                logger.info("No supported files found in: {}", inputDirectory);
+                logger.info("No supported files found in: {}", inputRoot);
                 return;
             }
 
@@ -67,8 +71,7 @@ public class BatchProcessor {
 
             var tasks = filesToProcess.stream()
                     .map(file -> (Callable<Void>) () -> {
-                        int count = processSingleFile(file, outputDirectory);
-                        totalPages.addAndGet(count);
+                        int count = processSingleFile(file, inputRoot, outputRoot);                        totalPages.addAndGet(count);
                         return null;
                     })
                     .toList();
@@ -84,26 +87,46 @@ public class BatchProcessor {
         }
     }
 
-    private int processSingleFile(Path inputFile, Path outputDirectory) {
+    private boolean isSupported(Path path) {
+        return providers.stream().anyMatch(p -> p.supports(path));
+    }
+
+    private int processSingleFile(Path inputFile, Path inputRoot, Path outputRoot) {
         try {
             MDC.put("file", inputFile.getFileName().toString());
             long start = System.currentTimeMillis();
 
-            IngestedDocument result = analyzer.extract(inputFile);
+            ExtractorProvider provider = providers.stream()
+                    .filter(p -> p.supports(inputFile))
+                    .findFirst()
+                    .orElseThrow();
 
-            Path targetFile = pathResolver.resolveUniquePath(
-                    outputDirectory,
+            Path relativePath = inputRoot.relativize(inputFile.getParent());
+            Path targetDir = outputRoot.resolve(relativePath);
+            Files.createDirectories(targetDir);
+
+            String baseName = getFileNameWithoutExtension(inputFile);
+            Path specificAssetDir = targetDir.resolve(baseName + "_assets");
+
+            var assetStorage = new LocalAssetStorage(specificAssetDir);
+
+            DocumentExtractor extractor = provider.create(assetStorage);
+
+            IngestedDocument result = extractor.extract(inputFile);
+
+            Path targetJsonFile = pathResolver.resolveUniquePath(
+                    targetDir,
                     inputFile.getFileName().toString(),
                     writer.extension()
             );
 
-            writer.write(result, targetFile);
+            writer.write(result, targetJsonFile);
 
-            logger.debug("Processed in {}ms -> {}", System.currentTimeMillis() - start, targetFile.getFileName());
+            logger.debug("Processed in {}ms -> {}", System.currentTimeMillis() - start, targetJsonFile);
             return result.metadata().totalPages();
 
         } catch (Exception e) {
-            logger.error("Failed to process file", e);
+            logger.error("Failed to process file: {}", inputFile, e);
             return 0;
         } finally {
             MDC.clear();
@@ -117,5 +140,11 @@ public class BatchProcessor {
         } catch (IOException e) {
             throw new RuntimeException("Cannot create output: " + output, e);
         }
+    }
+
+    private String getFileNameWithoutExtension(Path path) {
+        String fileName = path.getFileName().toString();
+        int dotIndex = fileName.lastIndexOf('.');
+        return (dotIndex == -1) ? fileName : fileName.substring(0, dotIndex);
     }
 }

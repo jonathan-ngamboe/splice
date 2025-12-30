@@ -2,12 +2,12 @@ package com.splice.cli;
 
 import com.splice.pipeline.BatchProcessor;
 import com.splice.io.json.JsonResultWriter;
-import com.splice.extraction.pdf.PdfExtractor;
 
 import picocli.CommandLine;
 
 import java.nio.file.Path;
 
+import java.util.List;
 import java.util.concurrent.Callable;
 
 @CommandLine.Command(name = "splice",
@@ -31,9 +31,11 @@ public class SpliceCommand implements Callable<Integer> {
 
     @Override
     public Integer call() throws Exception {
-        var analyzer = new PdfExtractor();
         var writer = new JsonResultWriter();
-        var processor = new BatchProcessor(analyzer, writer);
+        var providers = List.of(
+                com.splice.extraction.pdf.PdfExtractor.PROVIDER
+        );
+        var processor = new BatchProcessor(writer, providers);
 
         processor.process(input, output, recursive);
 
