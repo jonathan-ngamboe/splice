@@ -44,9 +44,8 @@ public class TextExtractor extends PDFTextStripper {
         this.setStartPage(pageNumber);
         this.setEndPage(pageNumber);
 
-        Writer dummyWriter = new OutputStreamWriter(new ByteArrayOutputStream());
         try {
-            this.writeText(doc, dummyWriter);
+            this.writeText(doc, Writer.nullWriter());
         } catch (IOException e) {
             throw new RuntimeException("Error while extracting the page " + pageNumber, e);
         }
