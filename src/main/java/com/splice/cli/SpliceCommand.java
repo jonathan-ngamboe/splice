@@ -1,8 +1,8 @@
 package com.splice.cli;
 
-import com.splice.service.core.BatchProcessor;
-import com.splice.service.json.JsonResultWriter;
-import com.splice.service.pdf.PdfAnalyzer;
+import com.splice.pipeline.BatchProcessor;
+import com.splice.io.json.JsonResultWriter;
+import com.splice.extraction.pdf.PdfExtractor;
 
 import picocli.CommandLine;
 
@@ -31,7 +31,7 @@ public class SpliceCommand implements Callable<Integer> {
 
     @Override
     public Integer call() throws Exception {
-        var analyzer = new PdfAnalyzer();
+        var analyzer = new PdfExtractor();
         var writer = new JsonResultWriter();
         var processor = new BatchProcessor(analyzer, writer);
 
