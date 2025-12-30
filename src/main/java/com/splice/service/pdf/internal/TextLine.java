@@ -65,6 +65,21 @@ public class TextLine {
         return atoms.getLast();
     }
 
+    public boolean accepts(TextAtom atom, float maxDistanceFactor) {
+        if (atoms.isEmpty()) return true;
+
+        TextAtom previousAtom = getLastAtom();
+
+        float horizontalGap = previousAtom.box().horizontalGap(atom.box());
+        float threshold = previousAtom.getEstimatedSpaceWidth() * maxDistanceFactor;
+
+        boolean isAligned = previousAtom.isVerticallyAlignedWith(atom);
+        boolean isNear = horizontalGap < threshold;
+        boolean isNotBackwards = atom.box().x() > previousAtom.box().x();
+
+        return isAligned && isNear && isNotBackwards;
+    }
+
     @Override
     public String toString() {
         return getText();

@@ -92,15 +92,7 @@ public class TextExtractor extends PDFTextStripper {
                 currentLine = new TextLine();
                 currentLine.addAtom(atom);
             } else {
-                TextAtom previousAtom = currentLine.getLastAtom();
-                float horizontalGap = previousAtom.box().horizontalGap(atom.box());
-                float threshold = previousAtom.getEstimatedSpaceWidth() * MAX_CHAR_DISTANCE_FACTOR;
-
-                boolean isAligned = previousAtom.isVerticallyAlignedWith(atom);
-                boolean isNear = horizontalGap < threshold;
-                boolean isNotBackwards = atom.box().x() > previousAtom.box().x();
-
-                if(isAligned && isNear && isNotBackwards) {
+                if (currentLine.accepts(atom, MAX_CHAR_DISTANCE_FACTOR)) {
                     currentLine.addAtom(atom);
                 } else {
                     lines.add(currentLine);
@@ -124,14 +116,7 @@ public class TextExtractor extends PDFTextStripper {
                 currentBlock = new TextBlock();
                 currentBlock.addLine(line);
             } else {
-                TextLine previousLine = currentBlock.getLastLine();
-                float verticalGap = previousLine.getBox().verticalGap(line.getBox());
-                float threshold = previousLine.getBox().height() * MAX_LINE_SPACING_FACTOR;
-
-                boolean isAligned = previousLine.getBox().overlapsHorizontally(line.getBox());
-                boolean isNear = verticalGap < threshold;
-
-                if(isAligned && isNear) {
+                if(currentBlock.accepts(line, MAX_LINE_SPACING_FACTOR)) {
                     currentBlock.addLine(line);
                 } else {
                     blocks.add(currentBlock);

@@ -60,6 +60,19 @@ public class TextBlock {
     public static final Comparator<TextBlock> READING_ORDER =
             (b1, b2) -> BoundingBox.compareReadingOrder(b1.getBox(), b2.getBox());
 
+    public boolean accepts(TextLine line, float maxDistanceFactor) {
+        if(lines.isEmpty()) return true;
+
+        TextLine previousLine = getLastLine();
+        float verticalGap = previousLine.getBox().verticalGap(line.getBox());
+        float threshold = previousLine.getBox().height() * maxDistanceFactor;
+
+        boolean isAligned = previousLine.getBox().overlapsHorizontally(line.getBox());
+        boolean isNear = verticalGap < threshold;
+
+        return isAligned && isNear;
+    }
+
     @Override
     public String toString() {
         return "TextBlock{y=" + (box != null ? box.y() : "null") + ", lines=" + lines.size() + "}";
