@@ -46,12 +46,12 @@ public class TextExtractor extends PDFTextStripper {
             throw new RuntimeException("Error while extracting the page " + pageNumber, e);
         }
 
-        sortAtoms(pageAtoms);
+        pageAtoms.sort(TextAtom.READING_ORDER);
 
         List<TextLine> lines = formLines(pageAtoms);
         List<TextBlock> blocks = formBlocks(lines);
 
-        blocks.sort(new XYBlockComparator());
+        blocks.sort(TextBlock.READING_ORDER);
 
         return transformToDocumentElements(blocks, pageNumber);
     }
@@ -81,15 +81,6 @@ public class TextExtractor extends PDFTextStripper {
                 new BoundingBox(atomBox.x, atomBox.y, atomBox.width, atomBox.height)
             )
         );
-    }
-
-    private void sortAtoms(List<TextAtom> atoms) {
-        atoms.sort((a, b) -> {
-            if (Math.abs(a.box().y() - b.box().y()) > 1.0f) {
-                return Float.compare(a.box().y(), b.box().y());
-            }
-            return Float.compare(a.box().x(), b.box().x());
-        });
     }
 
     private List<TextLine> formLines(List<TextAtom> atoms) {

@@ -57,6 +57,9 @@ public class TextBlock {
         return sumFontSize / charCount;
     }
 
+    public static final Comparator<TextBlock> READING_ORDER =
+            (b1, b2) -> BoundingBox.compareReadingOrder(b1.getBox(), b2.getBox());
+
     @Override
     public String toString() {
         return "TextBlock{y=" + (box != null ? box.y() : "null") + ", lines=" + lines.size() + "}";

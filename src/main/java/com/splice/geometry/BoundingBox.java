@@ -3,6 +3,8 @@ package com.splice.geometry;
 import java.awt.geom.Rectangle2D;
 
 public record BoundingBox(float x, float y, float width, float height) {
+    private static final float Y_OVERLAP_THRESHOLD = 0.40f;
+
     public BoundingBox {
         if (width < 0 || height < 0) {
             throw new IllegalArgumentException("Dimensions cannot be negative: w=" + width + ", h=" + height);        }
@@ -23,6 +25,7 @@ public record BoundingBox(float x, float y, float width, float height) {
     }
 
     public float getRightX() { return x + width; }
+
     public float getBottomY() { return y + height; }
 
     public float horizontalGap(BoundingBox other) {
@@ -46,5 +49,15 @@ public record BoundingBox(float x, float y, float width, float height) {
 
     public boolean overlapsHorizontally(BoundingBox other) {
         return this.x < other.getRightX() && this.getRightX() > other.x;
+    }
+
+    public static int compareReadingOrder(BoundingBox b1, BoundingBox b2) {
+        float overlap = b1.verticalOverlapRatio(b2);
+        boolean onSameLine = overlap > Y_OVERLAP_THRESHOLD;
+
+        if (onSameLine) {
+            return Float.compare(b1.x, b2.x);
+        }
+        return Float.compare(b1.y, b2.y);
     }
 }
