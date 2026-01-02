@@ -60,4 +60,11 @@ public record BoundingBox(float x, float y, float width, float height) {
         }
         return Float.compare(b1.y, b2.y);
     }
+
+    public boolean intersects(BoundingBox other) {
+        return this.x < other.x + other.width &&
+                this.x + this.width > other.x &&
+                this.y < other.y + other.height &&
+                this.y + this.height > other.y;
+    }
 }

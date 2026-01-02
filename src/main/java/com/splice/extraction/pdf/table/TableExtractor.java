@@ -25,6 +25,8 @@ public class TableExtractor {
 
     private final CSVWriter csvWriter;
 
+    private final TableZoneRefiner zoneRefiner;
+
     public TableExtractor() {
         this.latticeExtractor = new SpreadsheetExtractionAlgorithm();
         this.streamExtractor = new BasicExtractionAlgorithm();
@@ -34,6 +36,8 @@ public class TableExtractor {
         this.projectionDetector = new ProjectionProfileDetectionAlgorithm();
 
         this.csvWriter = new CSVWriter();
+
+        this.zoneRefiner = new TableZoneRefiner();
     }
 
     public List<DocumentElement>  extract(Page page) {
@@ -43,30 +47,42 @@ public class TableExtractor {
     public List<DocumentElement> extract(Page page, List<Rectangle2D.Float> zonesToExclude) {
         if(page == null) return List.of();
 
-        List<ExtractionTask> tasksToExecute = detectAndResolveConflicts(page);
+        List<ExtractionTask> tasksToExecute = detect(page);
 
         List<Table> tables = executeTasks(page, tasksToExecute, zonesToExclude);
+        System.out.println("Tables found: " + tables);
         tables.removeIf(TableExtractor::isNoise);
 
         return transformToDocumentElements(tables, page.getPageNumber());
     }
 
-    private List<ExtractionTask> detectAndResolveConflicts(Page page) {
+    private List<ExtractionTask> detect(Page page) {
         List<ExtractionTask> tasks = new ArrayList<>();
 
         List<Rectangle> latticeCandidates = latticeDetector.detect(page);
-        latticeCandidates.forEach(c -> tasks.add(new ExtractionTask(c, ExtractionMethod.LATTICE)));
-
         List<Rectangle> streamCandidates  = streamDetector.detect(page);
-        streamCandidates.removeIf(c -> isOverlappingWithAny(c, latticeCandidates));
-        streamCandidates.forEach(c -> tasks.add(new ExtractionTask(c, ExtractionMethod.STREAM)));
-
         List<Rectangle> projectionCandidates = projectionDetector.detect(page);
-        projectionCandidates.removeIf(c -> isOverlappingWithAny(c, latticeCandidates));
-        projectionCandidates.removeIf(c -> isOverlappingWithAny(c, streamCandidates));
-        projectionCandidates.forEach(c -> tasks.add(new ExtractionTask(c, ExtractionMethod.STREAM)));
+
+        List<Rectangle> allCandidates = new ArrayList<>();
+        allCandidates.addAll(latticeCandidates);
+        allCandidates.addAll(streamCandidates);
+        allCandidates.addAll(projectionCandidates);
+
+        List<Rectangle> refinedZones = zoneRefiner.refine(allCandidates);
+        System.out.println("Zones found: " + refinedZones);
+
+        refinedZones.forEach(z ->
+                tasks.add(new ExtractionTask(z, selectExtractionMethod(z, latticeCandidates))
+                ));
 
         return tasks;
+    }
+
+    private ExtractionMethod selectExtractionMethod(Rectangle refinedZone, List<Rectangle> originalLatticeCandidates) {
+        boolean touchesLattice = originalLatticeCandidates.stream()
+                .anyMatch(refinedZone::intersects);
+
+        return touchesLattice ? ExtractionMethod.LATTICE : ExtractionMethod.STREAM;
     }
 
     private List<Table> executeTasks(Page page, List<ExtractionTask> tasks, List<Rectangle2D.Float> awtZonesToExclude) {
@@ -102,7 +118,11 @@ public class TableExtractor {
     }
 
     private static boolean isNoise(Table table) {
+        System.out.println("Checking noise for table: " + table);
         if (table == null || table.getRowCount() <= 1 || table.getColCount() <= 1) {
+            System.out.println("Noise detected for table: " + table);
+            System.out.println("Rows: " + table.getRowCount());
+            System.out.println("Cols: " + table.getColCount());
             return true;
         }
 
