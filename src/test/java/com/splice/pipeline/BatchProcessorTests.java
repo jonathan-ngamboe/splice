@@ -123,7 +123,6 @@ class BatchProcessorTests {
         Path doc = Files.createFile(subFolder.resolve("invoice.pdf"));
 
         when(mockProvider.supports(doc)).thenReturn(true);
-        when(mockProvider.supports(subFolder)).thenReturn(false); // Directory check
         when(mockProvider.create(any(AssetStorage.class))).thenReturn(mockExtractor);
         when(mockExtractor.extract(doc)).thenReturn(dummyDoc);
 
