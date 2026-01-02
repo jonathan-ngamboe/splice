@@ -86,6 +86,12 @@
             <groupId>com.github.jonathan-ngamboe</groupId>
             <artifactId>tabula-java</artifactId>
             <version>1.0.7</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-simple</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
     </dependencies>
 
