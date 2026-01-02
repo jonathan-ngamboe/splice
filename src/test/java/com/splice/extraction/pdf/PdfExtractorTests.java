@@ -40,11 +40,11 @@ class PdfExtractorTests {
     @Mock
     private AssetStorage mockStorage;
 
-    private DocumentExtractor analyzer;
+    private DocumentExtractor extractor;
 
     @BeforeEach
     void setUp() throws IOException {
-        analyzer = new PdfExtractor(mockStorage);
+        extractor = new PdfExtractor(mockStorage);
 
         lenient().when(mockStorage.store(any(), anyString()))
                 .thenReturn("s3://dummy-bucket/image.png");
@@ -61,7 +61,7 @@ class PdfExtractorTests {
             doc.save(pdfPath.toFile());
         }
 
-        IngestedDocument document = analyzer.extract(pdfPath);
+        IngestedDocument document = extractor.extract(pdfPath);
 
         assertNotNull(document, "Document should not be null");
         assertEquals(2, document.metadata().totalPages(), "Should count 2 pages");
@@ -71,7 +71,7 @@ class PdfExtractorTests {
     @DisplayName("Should throw IOException when file does not exist")
     void shouldThrowExceptionForMissingFile() {
         Path file = Paths.get("non_existent_ghost_file.pdf");
-        assertThrows(IOException.class, () -> analyzer.extract(file));
+        assertThrows(IOException.class, () -> extractor.extract(file));
     }
 
     @Test
@@ -80,7 +80,7 @@ class PdfExtractorTests {
         Path fakePdf = tempDir.resolve("fake.pdf");
         Files.writeString(fakePdf, "I am not a PDF header");
 
-        assertThrows(IOException.class, () -> analyzer.extract(fakePdf));
+        assertThrows(IOException.class, () -> extractor.extract(fakePdf));
     }
 
     @Test
@@ -89,7 +89,7 @@ class PdfExtractorTests {
         Path pdfWithImage = tempDir.resolve("image_doc.pdf");
         createPdfWithImage(pdfWithImage);
 
-        IngestedDocument document = analyzer.extract(pdfWithImage);
+        IngestedDocument document = extractor.extract(pdfWithImage);
 
         assertFalse(document.elements().isEmpty(), "Elements should not be empty");
 
@@ -107,7 +107,7 @@ class PdfExtractorTests {
     void shouldExtractMixedContent() {
         try {
             Path file = getResourcePath("/mixed.pdf");
-            IngestedDocument document = analyzer.extract(file);
+            IngestedDocument document = extractor.extract(file);
 
             var elements = document.elements();
 
