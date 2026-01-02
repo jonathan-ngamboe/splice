@@ -21,6 +21,7 @@ public class TableExtractor {
 
     private final DetectionAlgorithm latticeDetector;
     private final DetectionAlgorithm streamDetector;
+    private final DetectionAlgorithm projectionDetector;
 
     private final CSVWriter csvWriter;
 
@@ -30,6 +31,7 @@ public class TableExtractor {
 
         this.latticeDetector = new SpreadsheetDetectionAlgorithm();
         this.streamDetector = new NurminenDetectionAlgorithm();
+        this.projectionDetector = new ProjectionProfileDetectionAlgorithm();
 
         this.csvWriter = new CSVWriter();
     }
@@ -52,12 +54,17 @@ public class TableExtractor {
     private List<ExtractionTask> detectAndResolveConflicts(Page page) {
         List<ExtractionTask> tasks = new ArrayList<>();
 
-        var latticeCandidates = latticeDetector.detect(page);
+        List<Rectangle> latticeCandidates = latticeDetector.detect(page);
         latticeCandidates.forEach(c -> tasks.add(new ExtractionTask(c, ExtractionMethod.LATTICE)));
 
-        var streamCandidates  = new ArrayList<>(streamDetector.detect(page));
+        List<Rectangle> streamCandidates  = streamDetector.detect(page);
         streamCandidates.removeIf(c -> isOverlappingWithAny(c, latticeCandidates));
         streamCandidates.forEach(c -> tasks.add(new ExtractionTask(c, ExtractionMethod.STREAM)));
+
+        List<Rectangle> projectionCandidates = projectionDetector.detect(page);
+        projectionCandidates.removeIf(c -> isOverlappingWithAny(c, latticeCandidates));
+        projectionCandidates.removeIf(c -> isOverlappingWithAny(c, streamCandidates));
+        projectionCandidates.forEach(c -> tasks.add(new ExtractionTask(c, ExtractionMethod.STREAM)));
 
         return tasks;
     }
