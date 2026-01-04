@@ -34,8 +34,15 @@ graph LR
 
 **Prerequisites:**
 
-* Java 21 (LTS)
-* Maven 3.9+
+**Splice** leverages native hardware acceleration (via ONNX Runtime) for layout analysis. Ensure your system meets the following requirements:
+
+* **Java:** JDK 21 (LTS) or higher.
+* **Build Tool:** Maven 3.9+.
+* **Native Dependencies (OS specific):**
+  * **Windows:** [Visual C++ Redistributable 2019+](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist) (Required for DLL execution).
+  * **Linux:** `libgomp1` (OpenMP support, usually pre-installed on desktop distros).
+    * *Debian/Ubuntu/Docker:* `apt-get install libgomp1`
+  * *macOS:* No additional dependencies required (universal binaries included).
 
 <!-- end list -->
 
@@ -52,7 +59,7 @@ mvn clean package
 Splice runs as a CLI tool.
 
 ```bash
-java -jar target/splice-1.0.jar --input ./data/documents --output ./results.json
+java -jar target/splice-1.0.jar --input ./data/documents --output ./results
 ```
 
 ### Configuration Options
@@ -67,22 +74,33 @@ java -jar target/splice-1.0.jar --input ./data/documents --output ./results.json
 
 ### Output Format
 
-Splice produces a normalized JSON structure regardless of the processing path:
+Splice produces a list of `DocumentElement` objects, preserving layout and structure:
 
 ```json
 [
   {
-    "source": "contract_v2.pdf",
-    "page": 1,
+    "id": "f4073ab5-0399...",
     "type": "TEXT",
-    "content": "SECTION 1: DEFINITIONS..."
+    "location": {
+      "pageNumber": 1,
+      "bbox": { "x": 36.0, "y": 74.8, "width": 453.3, "height": 13.6 }
+    },
+    "content": {
+      "contentType": "TEXT",
+      "text": "Docker provides the ability to package and run an application..."
+    }
   },
   {
-    "source": "contract_v2.pdf",
-    "page": 2,
-    "type": "IMAGE",
-    "metadata": { "resolution": "300dpi", "size": "2MB" },
-    "content_ref": "extracts/img_p2_hash.png"
+    "id": "bd0e6c79-ca4e...",
+    "type": "TABLE",
+    "location": {
+      "pageNumber": 1,
+      "bbox": { "x": 36.0, "y": 273.3, "width": 411.0, "height": 8.6 }
+    },
+    "content": {
+      "contentType": "TABLE",
+      "csvData": "INSTALLATION,GENERAL COMMAND\nDocker Desktop,[https://docs.docker.com/desktop](https://docs.docker.com/desktop)"
+    }
   }
 ]
 ```
