@@ -37,3 +37,6 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+# AI models (downloaded by Maven)
+src/main/resources/ml/models/*.onnx

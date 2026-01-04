@@ -12,6 +12,7 @@
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <ml.models.dir>${project.basedir}/src/main/resources/ml/models</ml.models.dir>
     </properties>
 
     <dependencyManagement>
@@ -175,6 +176,25 @@
                                     </manifestEntries>
                                 </transformer>
                             </transformers>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>com.googlecode.maven-download-plugin</groupId>
+                <artifactId>download-maven-plugin</artifactId>
+                <version>1.13.0</version>
+                <executions>
+                    <execution>
+                        <id>download-onnx-model</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>wget</goal>
+                        </goals>
+                        <configuration>
+                            <url>https://huggingface.co/Oblix/yolov8x-doclaynet_ONNX/resolve/main/onnx/model_quantized.onnx?download=true</url>
+                            <outputDirectory>${ml.models.dir}</outputDirectory>
+                            <outputFileName>yolov8x-doclaynet-quant.onnx</outputFileName>
                         </configuration>
                     </execution>
                 </executions>
