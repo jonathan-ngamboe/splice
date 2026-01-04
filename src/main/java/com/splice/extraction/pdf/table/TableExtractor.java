@@ -1,11 +1,9 @@
 package com.splice.extraction.pdf.table;
 
-import com.splice.model.geometry.BoundingBox;
-
-import com.splice.model.document.DocumentElement;
-import com.splice.model.document.ElementType;
-import com.splice.model.document.Location;
 import com.splice.model.document.content.TableContent;
+import com.splice.model.geometry.BoundingBox;
+import com.splice.model.document.*;
+
 import technology.tabula.*;
 import technology.tabula.detectors.*;
 import technology.tabula.extractors.*;
@@ -16,12 +14,13 @@ import java.io.IOException;
 import java.util.*;
 
 public class TableExtractor {
+    private static final double LATTICE_COVERAGE_THRESHOLD = 0.50;
+
     private final SpreadsheetExtractionAlgorithm latticeExtractor;
     private final BasicExtractionAlgorithm streamExtractor;
 
     private final DetectionAlgorithm latticeDetector;
     private final DetectionAlgorithm streamDetector;
-    private final DetectionAlgorithm projectionDetector;
 
     private final CSVWriter csvWriter;
 
@@ -33,7 +32,6 @@ public class TableExtractor {
 
         this.latticeDetector = new SpreadsheetDetectionAlgorithm();
         this.streamDetector = new NurminenDetectionAlgorithm();
-        this.projectionDetector = new ProjectionProfileDetectionAlgorithm();
 
         this.csvWriter = new CSVWriter();
 
@@ -50,8 +48,7 @@ public class TableExtractor {
         List<ExtractionTask> tasksToExecute = detect(page);
 
         List<Table> tables = executeTasks(page, tasksToExecute, zonesToExclude);
-        System.out.println("Tables found: " + tables);
-        tables.removeIf(TableExtractor::isNoise);
+        tables.removeIf(TableValidator::isNoise);
 
         return transformToDocumentElements(tables, page.getPageNumber());
     }
@@ -59,17 +56,15 @@ public class TableExtractor {
     private List<ExtractionTask> detect(Page page) {
         List<ExtractionTask> tasks = new ArrayList<>();
 
+
         List<Rectangle> latticeCandidates = latticeDetector.detect(page);
         List<Rectangle> streamCandidates  = streamDetector.detect(page);
-        List<Rectangle> projectionCandidates = projectionDetector.detect(page);
 
         List<Rectangle> allCandidates = new ArrayList<>();
         allCandidates.addAll(latticeCandidates);
         allCandidates.addAll(streamCandidates);
-        allCandidates.addAll(projectionCandidates);
 
         List<Rectangle> refinedZones = zoneRefiner.refine(allCandidates);
-        System.out.println("Zones found: " + refinedZones);
 
         refinedZones.forEach(z ->
                 tasks.add(new ExtractionTask(z, selectExtractionMethod(z, latticeCandidates))
@@ -79,10 +74,26 @@ public class TableExtractor {
     }
 
     private ExtractionMethod selectExtractionMethod(Rectangle refinedZone, List<Rectangle> originalLatticeCandidates) {
-        boolean touchesLattice = originalLatticeCandidates.stream()
-                .anyMatch(refinedZone::intersects);
+        float totalArea = refinedZone.getArea();
+        if (totalArea == 0) return ExtractionMethod.STREAM;
 
-        return touchesLattice ? ExtractionMethod.LATTICE : ExtractionMethod.STREAM;
+        double latticeCoveredArea = 0;
+
+        for (Rectangle latticeRect : originalLatticeCandidates) {
+            float interLeft = Math.max(refinedZone.getLeft(), latticeRect.getLeft());
+            float interTop = Math.max(refinedZone.getTop(), latticeRect.getTop());
+            float interRight = Math.min(refinedZone.getRight(), latticeRect.getRight());
+            float interBottom = Math.min(refinedZone.getBottom(), latticeRect.getBottom());
+
+            float interWidth = Math.max(0, interRight - interLeft);
+            float interHeight = Math.max(0, interBottom - interTop);
+
+            latticeCoveredArea += (interWidth * interHeight);
+        }
+
+        double coverageRatio = latticeCoveredArea / totalArea;
+
+        return coverageRatio > LATTICE_COVERAGE_THRESHOLD ? ExtractionMethod.LATTICE : ExtractionMethod.STREAM;
     }
 
     private List<Table> executeTasks(Page page, List<ExtractionTask> tasks, List<Rectangle2D.Float> awtZonesToExclude) {
@@ -115,30 +126,6 @@ public class TableExtractor {
         }
 
         return tables;
-    }
-
-    private static boolean isNoise(Table table) {
-        System.out.println("Checking noise for table: " + table);
-        if (table == null || table.getRowCount() <= 1 || table.getColCount() <= 1) {
-            System.out.println("Noise detected for table: " + table);
-            System.out.println("Rows: " + table.getRowCount());
-            System.out.println("Cols: " + table.getColCount());
-            return true;
-        }
-
-        boolean hasContent = false;
-
-        for (var row : table.getRows()) {
-            for (var cell : row) {
-                if (!cell.getText().trim().isEmpty()) {
-                    hasContent = true;
-                    break;
-                }
-            }
-            if (hasContent) break;
-        }
-
-        return !hasContent;
     }
 
     private List<DocumentElement> transformToDocumentElements(List<Table> tables, int pageNumber) {
@@ -174,10 +161,6 @@ public class TableExtractor {
         }
         stringBuilder.append("\n");
         return stringBuilder.toString();
-    }
-
-    private boolean isOverlappingWithAny(Rectangle candidate, List<Rectangle> existingAreas) {
-        return existingAreas.stream().anyMatch(candidate::intersects);
     }
 
     private technology.tabula.Rectangle convertAwtToTabula(Rectangle2D.Float awtRect) {
