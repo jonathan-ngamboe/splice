@@ -91,7 +91,7 @@ public class ImageExtractor extends PDFStreamEngine {
 
         extractedImages.add(new DocumentElement(
                 UUID.randomUUID().toString(),
-                ElementType.IMAGE_BLOCK,
+                ElementType.IMAGE,
                 new Location(currentPageNumber, box),
                 null, // Will be extracted separately
                 new ImageContent(storedPath, null)

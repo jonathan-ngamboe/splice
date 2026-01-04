@@ -156,7 +156,7 @@ public class TextExtractor extends PDFTextStripper {
         if (averageFontSize > bodySize * TITLE_SIZE_FACTOR) {
             return ElementType.TITLE;
         }
-        return ElementType.NARRATIVE_TEXT;
+        return ElementType.TEXT;
     }
 
     private List<DocumentElement> transformToDocumentElements(List<TextBlock> blocks, int pageNumber) {

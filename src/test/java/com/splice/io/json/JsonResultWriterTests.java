@@ -91,7 +91,7 @@ class JsonResultWriterTests {
 
         var element = new DocumentElement(
                 "elem-1",
-                ElementType.NARRATIVE_TEXT,
+                ElementType.TEXT,
                 location,
                 null,
                 content
