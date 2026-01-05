@@ -38,7 +38,7 @@ public class TableExtractor {
         this.zoneRefiner = new TableZoneRefiner();
     }
 
-    public List<DocumentElement>  extract(Page page) {
+    public List<DocumentElement> extract(Page page) {
         return extract(page, new ArrayList<>());
     }
 
@@ -53,9 +53,31 @@ public class TableExtractor {
         return transformToDocumentElements(tables, page.getPageNumber());
     }
 
+    public List<DocumentElement> extractRegion(Page page, BoundingBox region) {
+        if (page == null || region == null) return List.of();
+
+        float top = region.y();
+        float left = region.x();
+        float bottom = region.y() + region.height();
+        float right = region.x() + region.width();
+
+        Page workingArea = page.getArea(top, left, bottom, right);
+
+        List<Rectangle> latticeLines = latticeDetector.detect(workingArea);
+        boolean useLattice = !latticeLines.isEmpty();
+
+        List<Table> tables;
+        if (useLattice) {
+            tables = latticeExtractor.extract(workingArea);
+        } else {
+            tables = streamExtractor.extract(workingArea);
+        }
+
+        return transformToDocumentElements(tables, page.getPageNumber());
+    }
+
     private List<ExtractionTask> detect(Page page) {
         List<ExtractionTask> tasks = new ArrayList<>();
-
 
         List<Rectangle> latticeCandidates = latticeDetector.detect(page);
         List<Rectangle> streamCandidates  = streamDetector.detect(page);
@@ -132,8 +154,19 @@ public class TableExtractor {
         List<DocumentElement> documentElements = new ArrayList<>();
 
         for(var t : tables) {
+            if (t.getRows().isEmpty()) {
+                continue;
+            }
+            boolean isEmptyText = t.getRows().stream()
+                    .flatMap(Collection::stream)
+                    .allMatch(cell -> cell.getText().trim().isEmpty());
+
+            if (isEmptyText) {
+                continue;
+            }
+
             var tableLocation = new Location(pageNumber, new BoundingBox(
-                    (float) t.getMinX(), (float) t.getMinY(), t.width, t.height
+                    (float) t.getMinX(), (float) t.getMinY(), (float) t.getWidth(), (float) t.getHeight()
             ));
 
             var tableContent = new TableContent(convertTableToCsvString(t));
@@ -142,7 +175,7 @@ public class TableExtractor {
                     UUID.randomUUID().toString(),
                     ElementType.TABLE,
                     tableLocation,
-                    null, // Context will be extracted by parent
+                    null,
                     tableContent
             );
 
@@ -159,8 +192,7 @@ public class TableExtractor {
         } catch (IOException e) {
             throw new RuntimeException("Critical error while writing CSV to memory", e);
         }
-        stringBuilder.append("\n");
-        return stringBuilder.toString();
+        return stringBuilder.toString().trim() + "\n";
     }
 
     private technology.tabula.Rectangle convertAwtToTabula(Rectangle2D.Float awtRect) {
