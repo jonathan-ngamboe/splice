@@ -20,11 +20,14 @@ import ai.djl.MalformedModelException;
 
 import java.awt.image.BufferedImage;
 import java.io.IOException;
-import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 
 public class YoloLayoutDetector implements LayoutDetector, AutoCloseable {
+    private static final String SYNSET_PATH = "/ml/models/synset.txt";
     private static final String MODEL_PATH = "/ml/models/yolov8x-doclaynet-quant.onnx";
     private static final float CONFIDENCE_THRESHOLD = 0.5f;
     private static final float NMS_THRESHOLD = 0.4f;
@@ -38,7 +41,7 @@ public class YoloLayoutDetector implements LayoutDetector, AutoCloseable {
     }
 
     @Override
-    public PageLayout detect(BufferedImage javaImage, int pageNumber) throws TranslateException, ModelNotFoundException, MalformedModelException, IOException {
+    public PageLayout detect(BufferedImage javaImage, int pageNumber) throws TranslateException {
         if(javaImage == null) return null;
 
         List<LayoutElement> elements = new ArrayList<>();
@@ -90,20 +93,34 @@ public class YoloLayoutDetector implements LayoutDetector, AutoCloseable {
         return new BoundingBox(x, y, width, height);
     }
 
-    private Criteria<Image, DetectedObjects> loadCriteria() {
-        URL modelUrl = this.getClass().getResource(MODEL_PATH);
-
-        if (modelUrl == null) {
-            throw new IllegalStateException("CRITICAL: ONNX model not found in classpath at: [" + MODEL_PATH + "]");
-        }
-
+    private Criteria<Image, DetectedObjects> loadCriteria() throws IOException {
         Pipeline pipeline = new Pipeline();
         pipeline.add(new Resize(INPUT_SIZE, INPUT_SIZE));
         pipeline.add(new ToTensor());
 
+        Path tempModelFile = Files.createTempFile("yolov8", ".onnx");
+        tempModelFile.toFile().deleteOnExit();
+
+        try (var modelInput = this.getClass().getResourceAsStream(MODEL_PATH)) {
+            if (modelInput == null) {
+                throw new IllegalStateException("CRITICAL: Model not found at: " + MODEL_PATH);
+            }
+            Files.copy(modelInput, tempModelFile, StandardCopyOption.REPLACE_EXISTING);
+        }
+
+        try (var synsetInput = this.getClass().getResourceAsStream(SYNSET_PATH)) {
+            if (synsetInput != null) {
+                Path tempSynsetFile = tempModelFile.getParent().resolve("synset.txt");
+                tempSynsetFile.toFile().deleteOnExit();
+                Files.copy(synsetInput, tempSynsetFile, StandardCopyOption.REPLACE_EXISTING);
+            }
+        }
+
+        String modelUrl = tempModelFile.toUri().toString();
+
         return Criteria.builder()
                 .setTypes(Image.class, DetectedObjects.class)
-                .optModelUrls(modelUrl.toString())
+                .optModelUrls(modelUrl)
                 .optEngine("OnnxRuntime")
                 .optTranslator(YoloV8Translator.builder()
                         .setPipeline(pipeline)
