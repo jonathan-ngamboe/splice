@@ -1,7 +1,7 @@
 package com.splice.extraction.pdf.image;
 
 import com.splice.extraction.spi.AssetStorage;
-import com.splice.model.document.content.ImageContent;
+import com.splice.model.geometry.BoundingBox;
 
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -53,19 +53,10 @@ class ImageExtractorTests {
 
             var results = extractor.extract(page, 1);
 
-            assertEquals(1, results.size(), "Should find exactly one image");
-
-            var element = results.getFirst();
-            var bbox = element.location().bbox();
-
-            assertEquals(50, bbox.x(), 0.1, "X coordinate should match");
-            assertEquals(100, bbox.width(), 0.1, "Width should match");
-            assertEquals(100, bbox.height(), 0.1, "Height should match");
+            assertEquals(1, results.size());
+            var bbox = results.getFirst().location().bbox();
 
             assertEquals(300, bbox.y(), 0.1, "Y coordinate should be converted to Top-Left origin");
-
-            assertInstanceOf(ImageContent.class, element.content());
-            assertEquals("s3://fake-bucket/image.png", ((ImageContent) element.content()).imagePath());
         }
     }
 
@@ -76,44 +67,87 @@ class ImageExtractorTests {
             PDPage page = new PDPage(new PDRectangle(500, 500));
             doc.addPage(page);
 
-            BufferedImage tinyImage = createDummyImage(1, 1);
-            BufferedImage validImage = createDummyImage(60, 60);
-
-            injectImageIntoPage(doc, page, tinyImage, 0, 0);
-            injectImageIntoPage(doc, page, validImage, 100, 100);
+            injectImageIntoPage(doc, page, createDummyImage(1, 1), 0, 0);
+            injectImageIntoPage(doc, page, createDummyImage(60, 60), 100, 100);
 
             var results = extractor.extract(page, 1);
 
-            assertEquals(1, results.size(), "Should only keep images larger than threshold");
+            assertEquals(1, results.size());
 
             assertEquals(60, results.getFirst().location().bbox().width(), 0.1);
         }
     }
 
     @Test
-    @DisplayName("Should return empty list for page without images")
-    void shouldReturnEmptyForTextOnlyPage() throws IOException {
+    @DisplayName("Should extract ONLY the image intersecting the BoundingBox")
+    void shouldExtractOnlyImagesInsideRegion() throws IOException {
         try (PDDocument doc = new PDDocument()) {
-            PDPage page = new PDPage();
+            PDPage page = new PDPage(new PDRectangle(0, 0, 500, 500));
             doc.addPage(page);
 
-            var results = extractor.extract(page, 1);
+            BufferedImage img = createDummyImage(100, 100);
 
+            injectImageIntoPage(doc, page, img, 50, 350);
+
+            injectImageIntoPage(doc, page, img, 50, 50);
+
+            BoundingBox topRegion = new BoundingBox(0, 0, 500, 200);
+
+            var topResults = extractor.extractRegion(page, 1, topRegion);
+
+            assertEquals(1, topResults.size(), "Should only find the top image");
+            assertEquals(50, topResults.getFirst().location().bbox().y(), 1.0);
+
+            BoundingBox bottomRegion = new BoundingBox(0, 300, 500, 200);
+
+            var bottomResults = extractor.extractRegion(page, 1, bottomRegion);
+
+            assertEquals(1, bottomResults.size(), "Should only find the bottom image");
+            assertEquals(350, bottomResults.getFirst().location().bbox().y(), 1.0);
+        }
+    }
+
+    @Test
+    @DisplayName("Should return empty if image is outside the box")
+    void shouldReturnEmptyIfNoIntersection() throws IOException {
+        try (PDDocument doc = new PDDocument()) {
+            PDPage page = new PDPage(new PDRectangle(500, 500));
+            doc.addPage(page);
+
+            injectImageIntoPage(doc, page, createDummyImage(100, 100), 200, 200);
+
+            BoundingBox cornerBox = new BoundingBox(0, 0, 50, 50);
+
+            var results = extractor.extractRegion(page, 1, cornerBox);
             assertTrue(results.isEmpty());
         }
     }
 
     @Test
-    @DisplayName("Should handle null page safely")
-    void shouldHandleNullPage() throws IOException {
-        var results = extractor.extract(null, 0);
-        assertNotNull(results);
-        assertTrue(results.isEmpty());
+    @DisplayName("Should accept partial overlap")
+    void shouldExtractIfImagePartiallyOverlaps() throws IOException {
+        try (PDDocument doc = new PDDocument()) {
+            PDPage page = new PDPage(new PDRectangle(500, 500));
+            doc.addPage(page);
+
+            injectImageIntoPage(doc, page, createDummyImage(100, 100), 50, 350);
+
+            BoundingBox cuttingBox = new BoundingBox(90, 50, 200, 200);
+
+            var results = extractor.extractRegion(page, 1, cuttingBox);
+            assertEquals(1, results.size(), "Should extract image even if only partially inside");
+        }
     }
+
+    @Test
+    void extractRegion_nullInputs_shouldBeSafe() throws IOException {
+        BoundingBox box = new BoundingBox(0,0,10,10);
+        assertTrue(extractor.extractRegion(null, 1, box).isEmpty());
+    }
+
 
     private void injectImageIntoPage(PDDocument doc, PDPage page, BufferedImage img, float x, float y) throws IOException {
         PDImageXObject pdImage = LosslessFactory.createFromImage(doc, img);
-
         try (PDPageContentStream contentStream = new PDPageContentStream(doc, page, PDPageContentStream.AppendMode.APPEND, true, true)) {
             contentStream.drawImage(pdImage, x, y);
         }

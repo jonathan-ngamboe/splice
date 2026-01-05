@@ -1,17 +1,18 @@
 package com.splice.extraction.pdf.text;
 
-import com.splice.extraction.pdf.text.TextExtractor;
 import com.splice.model.document.content.TextContent;
+import com.splice.model.geometry.BoundingBox;
+
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+
 import org.junit.jupiter.api.*;
 
-import java.awt.geom.Rectangle2D;
 import java.io.IOException;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -37,43 +38,6 @@ class TextExtractorTests {
     }
 
     @Test
-    @DisplayName("Should ignore text located inside exclusion rectangles")
-    void shouldExtractTextIgnoringExcludedZones() throws IOException {
-        try (PDDocument document = new PDDocument()) {
-            PDPage page = new PDPage();
-            document.addPage(page);
-
-            writeText(document, page, "Secret Data", 50, 750);
-
-            writeText(document, page, "Public Info", 50, 100);
-
-            List<Rectangle2D.Float> exclusions = List.of(new Rectangle2D.Float(0, 0, 500, 200));
-
-            var results = extractor.extract(document, 1, exclusions);
-
-            String fullExtractedText = results.stream()
-                    .map(el -> ((TextContent) el.content()).text())
-                    .reduce("", (a, b) -> a + " " + b);
-
-            assertAll("Exclusion zone check",
-                    () -> assertTrue(fullExtractedText.contains("Public Info"), "Should keep the text outside the zone"),
-                    () -> assertFalse(fullExtractedText.contains("Secret Data"), "Should have removed the text inside the zone")
-            );
-        }
-    }
-
-    @Test
-    @DisplayName("Should handle null exclusion list safely (treat as empty)")
-    void shouldExtractEverythingWhenExclusionsAreNull() throws IOException {
-        try (PDDocument document = createInMemoryDocument("Test Content", 50, 700)) {
-            var results = extractor.extract(document, 1);
-
-            assertFalse(results.isEmpty());
-            assertTrue(((TextContent) results.getFirst().content()).text().contains("Test Content"));
-        }
-    }
-
-    @Test
     @DisplayName("Should return empty list for a completely blank page")
     void shouldReturnEmptyForBlankPage() throws IOException {
         try (PDDocument document = new PDDocument()) {
@@ -93,6 +57,56 @@ class TextExtractorTests {
     void shouldFailGracefullyOnInvalidPage() throws IOException {
         try (PDDocument document = createInMemoryDocument("Test", 50, 50)) {
             assertThrows(RuntimeException.class, () -> extractor.extract(document, 99));
+        }
+    }
+
+    @Test
+    @DisplayName("Should extract ONLY text within the specified bounding box (Inclusion)")
+    void shouldExtractTextFromSpecificRegion() throws IOException {
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage(PDRectangle.LETTER); // Hauteur standard ~792 points
+            document.addPage(page);
+
+            writeText(document, page, "TARGET_DATA", 50, 750);
+
+            writeText(document, page, "NOISE_DATA", 50, 50);
+
+            BoundingBox topRegion = new BoundingBox(0, 0, 500, 300);
+
+            var results = extractor.extractRegion(document, 1, topRegion);
+
+            assertFalse(results.isEmpty(), "Should find text in the top region");
+
+            String extractedText = ((TextContent) results.getFirst().content()).text();
+
+            assertAll("Region inclusion check",
+                    () -> assertTrue(extractedText.contains("TARGET_DATA"), "Should contain the text inside the box"),
+                    () -> assertFalse(extractedText.contains("NOISE_DATA"), "Should NOT contain text outside the box")
+            );
+        }
+    }
+
+    @Test
+    @DisplayName("Should return empty list when region contains no text")
+    void shouldReturnEmptyWhenRegionIsEmpty() throws IOException {
+        try (PDDocument document = createInMemoryDocument("Content is here", 100, 100)) {
+            BoundingBox emptyTopCorner = new BoundingBox(0, 0, 100, 100);
+
+            var results = extractor.extractRegion(document, 1, emptyTopCorner);
+
+            assertTrue(results.isEmpty(), "Should extract nothing from an empty area");
+        }
+    }
+
+    @Test
+    @DisplayName("Should handle null BoundingBox or Document gracefully")
+    void shouldHandleNullArgumentsInRegion() throws IOException {
+        try (PDDocument doc = new PDDocument()) {
+            var res1 = extractor.extractRegion(doc, 1, null);
+            assertTrue(res1.isEmpty(), "Null box should result in empty list");
+
+            var res2 = extractor.extractRegion(null, 1, new BoundingBox(0,0,10,10));
+            assertTrue(res2.isEmpty(), "Null doc should result in empty list");
         }
     }
 

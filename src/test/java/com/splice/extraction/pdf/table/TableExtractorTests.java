@@ -1,13 +1,16 @@
 package com.splice.extraction.pdf.table;
 
-import static org.junit.jupiter.api.Assertions.*;
-
 import com.splice.model.document.DocumentElement;
 import com.splice.model.document.Location;
 import com.splice.model.document.content.TableContent;
+import com.splice.model.geometry.BoundingBox;
+
+import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.*;
+
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
-import org.junit.jupiter.api.*;
+
 import technology.tabula.ObjectExtractor;
 import technology.tabula.Page;
 
@@ -23,6 +26,7 @@ public class TableExtractorTests {
     private static final TableExtractor extractor = new TableExtractor();
 
     private static PDDocument document;
+    private static Page tabulaPage;
     private static List<DocumentElement> results;
 
     @BeforeAll
@@ -32,8 +36,8 @@ public class TableExtractorTests {
         document = Loader.loadPDF(pdfFile);
 
         try (ObjectExtractor tabulaExtractor = new ObjectExtractor(document)) {
-            Page realTabulaPage = tabulaExtractor.extract().next();
-            results = extractor.extract(realTabulaPage);
+            tabulaPage = tabulaExtractor.extract().next();
+            results = extractor.extract(tabulaPage);
         }
     }
 
@@ -77,5 +81,39 @@ public class TableExtractorTests {
     @Test
     void extract_nullPage_shouldReturnEmptyList() {
         assertTrue(extractor.extract(null).isEmpty());
+    }
+
+    @Test
+    @DisplayName("SShould extract table when given the correct BoundingBox")
+    void extractRegionWithValidBox() {
+        var correctBox = results.getFirst().location().bbox();
+
+        List<DocumentElement> regionResults = extractor.extractRegion(tabulaPage, correctBox);
+
+        assertNotNull(regionResults);
+        assertEquals(1, regionResults.size(), "Should find 1 table in the defined region");
+
+        TableContent content = (TableContent) regionResults.getFirst().content();
+        assertTrue(content.csvData().contains("Price"), "Region extracted content should match expectation");
+    }
+
+    @Test
+    @DisplayName("Should return empty list when looking at an empty margin")
+    void extractRegionWithEmptyZone() {
+        var emptyMarginBox = new BoundingBox(0f, 0f, 10f, 10f);
+
+        List<DocumentElement> regionResults = extractor.extractRegion(tabulaPage, emptyMarginBox);
+
+        assertNotNull(regionResults);
+        assertTrue(regionResults.isEmpty(), "Should not find any table in the top-left margin");
+    }
+
+    @Test
+    @DisplayName("Should be robust to null arguments")
+    void extractRegionNullArgs() {
+        var box = new BoundingBox(10f, 10f, 100f, 100f);
+
+        assertTrue(extractor.extractRegion(null, box).isEmpty(), "Null page should return empty");
+        assertTrue(extractor.extractRegion(tabulaPage, null).isEmpty(), "Null box should return empty");
     }
 }
