@@ -1,5 +1,6 @@
 package com.splice.pipeline;
 
+import com.splice.detection.LayoutDetector;
 import com.splice.extraction.DocumentExtractor;
 import com.splice.extraction.spi.AssetStorage;
 import com.splice.extraction.spi.ExtractorProvider;
@@ -41,6 +42,8 @@ class BatchProcessorTests {
     private IngestedDocument dummyDoc;
     @Mock
     private DocumentMetadata dummyMetadata;
+    @Mock
+    private LayoutDetector mockDetector;
 
     private BatchProcessor processor;
 
@@ -49,7 +52,7 @@ class BatchProcessorTests {
         inputDir = Files.createDirectory(tempDir.resolve("in"));
         outputDir = Files.createDirectory(tempDir.resolve("out"));
 
-        processor = new BatchProcessor(mockWriter, List.of(mockProvider));
+        processor = new BatchProcessor(mockWriter, List.of(mockProvider), mockDetector);
 
         lenient().when(mockWriter.extension()).thenReturn(".json");
 
@@ -60,16 +63,12 @@ class BatchProcessorTests {
     @Test
     @DisplayName("Should process valid files using the provider strategy")
     void shouldWriteToOutput() throws IOException {
-        // GIVEN
         Path pdf1 = Files.createFile(inputDir.resolve("doc1.pdf"));
         Path pdf2 = Files.createFile(inputDir.resolve("doc2.pdf"));
 
-        // Simulation: Le provider accepte les fichiers
-        when(mockProvider.supports(pdf1)).thenReturn(true);
-        when(mockProvider.supports(pdf2)).thenReturn(true);
+        when(mockProvider.supports(any(Path.class))).thenReturn(true);
 
-        when(mockProvider.create(any(AssetStorage.class))).thenReturn(mockExtractor);
-
+        when(mockProvider.create(any(AssetStorage.class), eq(mockDetector))).thenReturn(mockExtractor);
         when(mockExtractor.extract(any(Path.class))).thenReturn(dummyDoc);
 
         processor.process(inputDir, outputDir, false);
@@ -77,7 +76,7 @@ class BatchProcessorTests {
         verify(mockWriter).write(dummyDoc, outputDir.resolve("doc1.json"));
         verify(mockWriter).write(dummyDoc, outputDir.resolve("doc2.json"));
 
-        verify(mockProvider, times(2)).create(any(AssetStorage.class));
+        verify(mockProvider, times(2)).create(any(AssetStorage.class), eq(mockDetector));
     }
 
     @Test
@@ -89,7 +88,7 @@ class BatchProcessorTests {
         when(mockProvider.supports(pdf)).thenReturn(true);
         when(mockProvider.supports(txt)).thenReturn(false);
 
-        when(mockProvider.create(any(AssetStorage.class))).thenReturn(mockExtractor);
+        when(mockProvider.create(any(AssetStorage.class), eq(mockDetector))).thenReturn(mockExtractor);
         when(mockExtractor.extract(pdf)).thenReturn(dummyDoc);
 
         processor.process(inputDir, outputDir, false);
@@ -105,7 +104,7 @@ class BatchProcessorTests {
         Path good = Files.createFile(inputDir.resolve("good.pdf"));
 
         when(mockProvider.supports(any())).thenReturn(true);
-        when(mockProvider.create(any(AssetStorage.class))).thenReturn(mockExtractor);
+        when(mockProvider.create(any(AssetStorage.class), eq(mockDetector))).thenReturn(mockExtractor);
 
         when(mockExtractor.extract(bad)).thenThrow(new RuntimeException("Parsing failed"));
         when(mockExtractor.extract(good)).thenReturn(dummyDoc);
@@ -123,7 +122,7 @@ class BatchProcessorTests {
         Path doc = Files.createFile(subFolder.resolve("invoice.pdf"));
 
         when(mockProvider.supports(doc)).thenReturn(true);
-        when(mockProvider.create(any(AssetStorage.class))).thenReturn(mockExtractor);
+        when(mockProvider.create(any(AssetStorage.class), eq(mockDetector))).thenReturn(mockExtractor);
         when(mockExtractor.extract(doc)).thenReturn(dummyDoc);
 
         processor.process(inputDir, outputDir, true);
