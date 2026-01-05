@@ -1,10 +1,6 @@
 package com.splice.extraction.pdf;
 
-import ai.djl.MalformedModelException;
-import ai.djl.repository.zoo.ModelNotFoundException;
-import ai.djl.translate.TranslateException;
-
-import com.splice.detection.YoloLayoutDetector;
+import com.splice.detection.LayoutDetector;
 import com.splice.extraction.DocumentExtractor;
 import com.splice.extraction.pdf.image.ImageExtractor;
 import com.splice.extraction.pdf.table.TableExtractor;
@@ -28,15 +24,11 @@ import java.util.*;
 
 public class PdfExtractor implements DocumentExtractor {
     private final AssetStorage assetStorage;
-    private final YoloLayoutDetector yoloDetector;
+    private final LayoutDetector layoutDetector;
 
-    public PdfExtractor(AssetStorage assetStorage) {
+    public PdfExtractor(AssetStorage assetStorage, LayoutDetector layoutDetector) {
         this.assetStorage = assetStorage;
-        try {
-            yoloDetector = new YoloLayoutDetector();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        this.layoutDetector = layoutDetector;
     }
 
     public static final ExtractorProvider PROVIDER = new ExtractorProvider() {
@@ -46,8 +38,8 @@ public class PdfExtractor implements DocumentExtractor {
         }
 
         @Override
-        public DocumentExtractor create(AssetStorage storage) {
-            return new PdfExtractor(storage);
+        public DocumentExtractor create(AssetStorage storage, LayoutDetector detector) {
+            return new PdfExtractor(storage, detector);
         }
     };
 
@@ -75,7 +67,7 @@ public class PdfExtractor implements DocumentExtractor {
                 var pdfRenderer = new PDFRenderer(document);
                 BufferedImage img = pdfRenderer.renderImageWithDPI(pageNumber - 1, 72);
 
-                PageLayout pageLayout = yoloDetector.detect(img, pageNumber);
+                PageLayout pageLayout = layoutDetector.detect(img, pageNumber);
 
                 for(var layoutElement : pageLayout.elements()) {
                     var type = layoutElement.type();
@@ -104,7 +96,6 @@ public class PdfExtractor implements DocumentExtractor {
             allElements.sort(DocumentElement.READING_ORDER);
 
             long duration = System.currentTimeMillis() - start;
-            System.out.println("Duration: " + duration);
 
             metadata = new DocumentMetadata(
                 getFileName(path),
@@ -112,9 +103,10 @@ public class PdfExtractor implements DocumentExtractor {
                 document.getNumberOfPages(),
                 duration
             );
-        } catch (TranslateException | ModelNotFoundException | MalformedModelException e) {
+        } catch (Exception e) {
             throw new RuntimeException(e);
         }
+
         return new IngestedDocument(UUID.randomUUID().toString(), metadata, allElements);
     }
 

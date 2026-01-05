@@ -28,15 +28,17 @@ public class BatchProcessor {
     private final ResultWriter writer;
     private final PathResolver pathResolver;
     private final List<ExtractorProvider> providers;
+    private final com.splice.detection.LayoutDetector detector;
 
-    public BatchProcessor(ResultWriter writer, List<ExtractorProvider> providers) {
-        this(writer, new PathResolver(), providers);
+    public BatchProcessor(ResultWriter writer, List<ExtractorProvider> providers, com.splice.detection.LayoutDetector detector) {
+        this(writer, new PathResolver(), providers, detector);
     }
 
-    public BatchProcessor(ResultWriter writer, PathResolver pathResolver, List<ExtractorProvider> providers) {
+    public BatchProcessor(ResultWriter writer, PathResolver pathResolver, List<ExtractorProvider> providers, com.splice.detection.LayoutDetector detector) {
         this.writer = writer;
         this.pathResolver = pathResolver;
         this.providers = providers;
+        this.detector = detector;
     }
 
     /**
@@ -110,7 +112,7 @@ public class BatchProcessor {
 
             var assetStorage = new LocalAssetStorage(specificAssetDir);
 
-            DocumentExtractor extractor = provider.create(assetStorage);
+            DocumentExtractor extractor = provider.create(assetStorage, detector);
 
             IngestedDocument result = extractor.extract(inputFile);
 

@@ -35,9 +35,12 @@ public class SpliceCommand implements Callable<Integer> {
         var providers = List.of(
                 com.splice.extraction.pdf.PdfExtractor.PROVIDER
         );
-        var processor = new BatchProcessor(writer, providers);
+        try (var detector = new com.splice.detection.YoloLayoutDetector()) {
 
-        processor.process(input, output, recursive);
+            var processor = new BatchProcessor(writer, providers, detector);
+
+            processor.process(input, output, recursive);
+        }
 
         return 0;
     }
