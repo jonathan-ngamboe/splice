@@ -20,6 +20,7 @@ import org.apache.pdfbox.pdmodel.graphics.form.PDFormXObject;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.util.Matrix;
 
+import java.awt.geom.Rectangle2D;
 import java.io.IOException;
 import java.util.*;
 
@@ -32,6 +33,7 @@ public class ImageExtractor extends PDFStreamEngine {
 
     private int currentPageNumber;
     private float currentPageHeight;
+    private BoundingBox regionOfInterest;
 
     public ImageExtractor(AssetStorage imageStorage) {
         this.imageStorage = imageStorage;
@@ -43,11 +45,16 @@ public class ImageExtractor extends PDFStreamEngine {
     }
 
     public List<DocumentElement> extract(PDPage page, int pageNumber) throws IOException {
+        return extractRegion(page, pageNumber, null);
+    }
+
+    public List<DocumentElement> extractRegion(PDPage page, int pageNumber, BoundingBox region) throws IOException {
         if(page == null) return List.of();
 
         this.extractedImages.clear();
         this.currentPageNumber = pageNumber;
         this.currentPageHeight = page.getCropBox().getHeight();
+        this.regionOfInterest = region;
 
         processPage(page);
 
@@ -83,16 +90,31 @@ public class ImageExtractor extends PDFStreamEngine {
             return;
         }
 
-        String storedPath = imageStorage.store(image, String.valueOf(currentPageNumber));
-
         float yWeb = currentPageHeight - yPdf - displayHeight;
+        BoundingBox imageBox = new BoundingBox(xPdf, yWeb, displayWidth, displayHeight);
 
-        BoundingBox box = new BoundingBox(xPdf, yWeb, displayWidth, displayHeight);
+        if (this.regionOfInterest != null) {
+            Rectangle2D.Float regionRect = new Rectangle2D.Float(
+                    regionOfInterest.x(), regionOfInterest.y(),
+                    regionOfInterest.width(), regionOfInterest.height()
+            );
+
+            Rectangle2D.Float imgRect = new Rectangle2D.Float(
+                    imageBox.x(), imageBox.y(),
+                    imageBox.width(), imageBox.height()
+            );
+
+            if (!regionRect.intersects(imgRect)) {
+                return;
+            }
+        }
+
+        String storedPath = imageStorage.store(image, String.valueOf(currentPageNumber));
 
         extractedImages.add(new DocumentElement(
                 UUID.randomUUID().toString(),
                 ElementType.IMAGE,
-                new Location(currentPageNumber, box),
+                new Location(currentPageNumber, imageBox),
                 null, // Will be extracted separately
                 new ImageContent(storedPath, null)
         ));
