@@ -3,42 +3,66 @@ package com.splice.extraction.pdf.text;
 import com.splice.extraction.pdf.text.internal.TextAtom;
 import com.splice.extraction.pdf.text.internal.TextBlock;
 import com.splice.extraction.pdf.text.internal.TextLine;
+
 import com.splice.model.geometry.BoundingBox;
 import com.splice.model.document.DocumentElement;
 import com.splice.model.document.ElementType;
 import com.splice.model.document.Location;
 import com.splice.model.document.content.TextContent;
 
+import com.splice.model.layout.LayoutElement;
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.text.*;
 
 import java.awt.geom.Rectangle2D;
 import java.io.*;
 import java.util.*;
 
-public class TextExtractor extends PDFTextStripper {
+public class TextExtractor extends PDFTextStripperByArea {
     private static final float MAX_CHAR_DISTANCE_FACTOR = 3.0f;
     private static final float MAX_LINE_SPACING_FACTOR = 1.5f;
     private static final float TITLE_SIZE_FACTOR = 1.3f;
 
     private final List<TextAtom> pageAtoms = new ArrayList<>();
+
+    private BoundingBox regionOfInterest;
     private List<Rectangle2D.Float> currentZonesToExclude;
 
-    public TextExtractor() {
+    public TextExtractor() throws IOException {
         super();
         this.setSortByPosition(false);
     }
 
-    public List<DocumentElement> extract(PDDocument doc, int pageNumber) {
-        return extract(doc, pageNumber, null);
+
+    public List<DocumentElement> extract(PDDocument doc, int pageNumber, LayoutElement layoutElement) {
+        return extract(doc, pageNumber, layoutElement, null);
     }
 
-    public List<DocumentElement> extract(PDDocument doc, int pageNumber, List<Rectangle2D.Float> zonesToExclude) {        this.pageAtoms.clear();
+    public List<DocumentElement> extract(PDDocument doc, int pageNumber,
+                                         LayoutElement layoutElement, List<Rectangle2D.Float> zonesToExclude) {
         if (pageNumber <= 0 || pageNumber > doc.getNumberOfPages()) {
-            throw new IllegalArgumentException("Page number must be 1-based (PDF standard). Received: " + pageNumber);
+            throw new IllegalArgumentException("Page number must be 1-based. Received: " + pageNumber);
         }
 
+        PDPage page = doc.getPage(pageNumber - 1);
+        PDRectangle mediaBox = page.getMediaBox();
+
+        BoundingBox fullPageBox = new BoundingBox(0, 0, mediaBox.getWidth(), mediaBox.getHeight());
+
+        return extractRegion(doc, pageNumber, fullPageBox, layoutElement, zonesToExclude);
+    }
+
+    public List<DocumentElement> extractRegion(PDDocument doc, int pageNumber, BoundingBox region, LayoutElement layoutElement) {
+        return extractRegion(doc, pageNumber, region, layoutElement, null);
+    }
+
+    public List<DocumentElement> extractRegion(PDDocument doc, int pageNumber, BoundingBox region, LayoutElement layoutElement, List<Rectangle2D.Float> zonesToExclude) {
+        if(doc == null) return new ArrayList<>();
+
         this.pageAtoms.clear();
+        this.regionOfInterest = region;
         this.currentZonesToExclude = zonesToExclude != null ? zonesToExclude : new ArrayList<>();
 
         this.setStartPage(pageNumber);
@@ -47,7 +71,7 @@ public class TextExtractor extends PDFTextStripper {
         try {
             this.writeText(doc, Writer.nullWriter());
         } catch (IOException e) {
-            throw new RuntimeException("Error while extracting the page " + pageNumber, e);
+            throw new RuntimeException("Error while extracting region on page " + pageNumber, e);
         }
 
         pageAtoms.sort(TextAtom.READING_ORDER);
@@ -57,7 +81,9 @@ public class TextExtractor extends PDFTextStripper {
 
         blocks.sort(TextBlock.READING_ORDER);
 
-        return transformToDocumentElements(blocks, pageNumber);
+        ElementType typeHint = (layoutElement != null) ? layoutElement.type() : null;
+
+        return transformToDocumentElements(blocks, pageNumber, typeHint);
     }
 
     @Override
@@ -68,22 +94,33 @@ public class TextExtractor extends PDFTextStripper {
                 text.getX(), text.getYDirAdj(), text.getWidth(), text.getHeight()
         );
 
-        boolean isInsideTable = currentZonesToExclude.stream()
+        if (this.regionOfInterest != null) {
+            Rectangle2D.Float regionRect = new Rectangle2D.Float(
+                    regionOfInterest.x(), regionOfInterest.y(),
+                    regionOfInterest.width(), regionOfInterest.height()
+            );
+
+            if (!regionRect.intersects(atomBox)) {
+                return;
+            }
+        }
+
+        boolean isInsideExcludedZone = currentZonesToExclude.stream()
                 .anyMatch(zone -> zone.intersects(atomBox));
 
-        if (isInsideTable) {
+        if (isInsideExcludedZone) {
             return;
         }
 
         String normalized = java.text.Normalizer.normalize(text.getUnicode(), java.text.Normalizer.Form.NFKC);
 
         pageAtoms.add(
-            new TextAtom(
-                normalized,
-                text.getFontSizeInPt(),
-                text.getFont().getName(),
-                new BoundingBox(atomBox.x, atomBox.y, atomBox.width, atomBox.height)
-            )
+                new TextAtom(
+                        normalized,
+                        text.getFontSizeInPt(),
+                        text.getFont().getName(),
+                        new BoundingBox(atomBox.x, atomBox.y, atomBox.width, atomBox.height)
+                )
         );
     }
 
@@ -135,39 +172,13 @@ public class TextExtractor extends PDFTextStripper {
         return blocks;
     }
 
-    private float calculateBodyFontSize(List<TextAtom> atoms) {
-        if (atoms.isEmpty()) return 12.0f;
-
-        Map<Float, Integer> frequencyMap = new HashMap<>();
-
-        for (TextAtom atom : atoms) {
-            float roundedSize = Math.round(atom.fontSize() * 2) / 2.0f;
-            frequencyMap.put(roundedSize, frequencyMap.getOrDefault(roundedSize, 0) + 1);
-        }
-
-        return frequencyMap.entrySet().stream()
-                .max(Map.Entry.comparingByValue())
-                .map(Map.Entry::getKey)
-                .orElse(12.0f);
-    }
-
-    private ElementType determineType(TextBlock block, float bodySize) {
-        float averageFontSize = block.getAverageFontSize();
-        if (averageFontSize > bodySize * TITLE_SIZE_FACTOR) {
-            return ElementType.TITLE;
-        }
-        return ElementType.TEXT;
-    }
-
-    private List<DocumentElement> transformToDocumentElements(List<TextBlock> blocks, int pageNumber) {
-        float bodyFontSize = calculateBodyFontSize(pageAtoms);
-
+    private List<DocumentElement> transformToDocumentElements(List<TextBlock> blocks, int pageNumber, ElementType elementType) {
         return blocks
                 .stream()
                 .map(
             block -> new DocumentElement(
                     UUID.randomUUID().toString(),
-                    determineType(block, bodyFontSize),
+                    elementType,
                     new Location(pageNumber, block.getBox()),
                     null, // Context will be extracted by parent
                     new TextContent(block.getText())

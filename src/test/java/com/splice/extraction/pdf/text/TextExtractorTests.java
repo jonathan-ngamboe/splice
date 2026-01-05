@@ -1,7 +1,9 @@
 package com.splice.extraction.pdf.text;
 
+import com.splice.model.document.ElementType;
 import com.splice.model.document.content.TextContent;
 import com.splice.model.geometry.BoundingBox;
+import com.splice.model.layout.LayoutElement;
 
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -19,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class TextExtractorTests {
     private final TextExtractor extractor;
 
-    TextExtractorTests() {
+    TextExtractorTests() throws IOException {
         this.extractor = new TextExtractor();
     }
 
@@ -27,7 +29,7 @@ class TextExtractorTests {
     @DisplayName("Should extract simple text content from a generated PDF page")
     void shouldExtractTextFromSimplePage() throws IOException {
         try (PDDocument document = createInMemoryDocument("Hello World", 50, 700)) {
-            var results = extractor.extract(document, 1);
+            var results = extractor.extract(document, 1, null);
 
             assertAll("Basic extraction check",
                     () -> assertFalse(results.isEmpty(), "Should return at least one element"),
@@ -43,7 +45,7 @@ class TextExtractorTests {
         try (PDDocument document = new PDDocument()) {
             document.addPage(new PDPage());
 
-            var results = extractor.extract(document, 1);
+            var results = extractor.extract(document, 1, null);
 
             boolean contentIsEmpty = results.isEmpty() ||
                     results.stream().allMatch(el -> ((TextContent)el.content()).text().isBlank());
@@ -56,7 +58,7 @@ class TextExtractorTests {
     @DisplayName("Should throw exception or return empty if page index is invalid")
     void shouldFailGracefullyOnInvalidPage() throws IOException {
         try (PDDocument document = createInMemoryDocument("Test", 50, 50)) {
-            assertThrows(RuntimeException.class, () -> extractor.extract(document, 99));
+            assertThrows(RuntimeException.class, () -> extractor.extract(document, 99, null));
         }
     }
 
@@ -64,16 +66,15 @@ class TextExtractorTests {
     @DisplayName("Should extract ONLY text within the specified bounding box (Inclusion)")
     void shouldExtractTextFromSpecificRegion() throws IOException {
         try (PDDocument document = new PDDocument()) {
-            PDPage page = new PDPage(PDRectangle.LETTER); // Hauteur standard ~792 points
+            PDPage page = new PDPage(PDRectangle.LETTER);
             document.addPage(page);
 
             writeText(document, page, "TARGET_DATA", 50, 750);
-
             writeText(document, page, "NOISE_DATA", 50, 50);
 
             BoundingBox topRegion = new BoundingBox(0, 0, 500, 300);
 
-            var results = extractor.extractRegion(document, 1, topRegion);
+            var results = extractor.extractRegion(document, 1, topRegion, null);
 
             assertFalse(results.isEmpty(), "Should find text in the top region");
 
@@ -92,7 +93,7 @@ class TextExtractorTests {
         try (PDDocument document = createInMemoryDocument("Content is here", 100, 100)) {
             BoundingBox emptyTopCorner = new BoundingBox(0, 0, 100, 100);
 
-            var results = extractor.extractRegion(document, 1, emptyTopCorner);
+            var results = extractor.extractRegion(document, 1, emptyTopCorner, null);
 
             assertTrue(results.isEmpty(), "Should extract nothing from an empty area");
         }
@@ -102,11 +103,31 @@ class TextExtractorTests {
     @DisplayName("Should handle null BoundingBox or Document gracefully")
     void shouldHandleNullArgumentsInRegion() throws IOException {
         try (PDDocument doc = new PDDocument()) {
-            var res1 = extractor.extractRegion(doc, 1, null);
+            var res1 = extractor.extractRegion(doc, 1, null, null);
             assertTrue(res1.isEmpty(), "Null box should result in empty list");
 
-            var res2 = extractor.extractRegion(null, 1, new BoundingBox(0,0,10,10));
+            var res2 = extractor.extractRegion(null, 1, new BoundingBox(0,0,10,10), null);
             assertTrue(res2.isEmpty(), "Null doc should result in empty list");
+        }
+    }
+
+    @Test
+    @DisplayName("Should force ElementType if LayoutElement provides a hint (e.g. TITLE)")
+    void shouldUseTypeHintFromLayoutElement() throws IOException {
+        try (PDDocument document = createInMemoryDocument("This is a Title", 50, 700)) {
+
+            LayoutElement yoloHint = new LayoutElement(
+                    0.95,
+                    ElementType.TITLE,
+                    new BoundingBox(0, 0, 500, 200)
+            );
+
+            var results = extractor.extract(document, 1, yoloHint);
+
+            assertFalse(results.isEmpty());
+
+            assertEquals(ElementType.TITLE, results.getFirst().type(),
+                    "Extractor should respect the type hint provided by layout element");
         }
     }
 
