@@ -2,9 +2,8 @@ package com.splice.io.json;
 
 import com.splice.model.document.content.TextContent;
 import com.splice.model.geometry.BoundingBox;
-
-import com.splice.io.json.JsonResultWriter;
 import com.splice.model.document.*;
+
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -79,7 +78,7 @@ class JsonResultWriterTests {
         JsonNode element = root.get("elements").get(0);
 
         assertEquals("elem-1", element.get("id").asString());
-        assertEquals("NARRATIVE_TEXT", element.get("type").asString());
+        assertEquals(ElementType.TEXT.toString(), element.get("type").asString());
 
         assertEquals(1, element.get("location").get("pageNumber").asInt());
     }
