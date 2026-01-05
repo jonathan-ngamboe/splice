@@ -28,6 +28,7 @@ public class YoloLayoutDetector implements LayoutDetector, AutoCloseable {
     private static final String MODEL_PATH = "/ml/models/yolov8x-doclaynet-quant.onnx";
     private static final float CONFIDENCE_THRESHOLD = 0.5f;
     private static final float NMS_THRESHOLD = 0.4f;
+    private static final int INPUT_SIZE = 640;
 
     private final ZooModel<Image, DetectedObjects> model;
 
@@ -44,22 +45,25 @@ public class YoloLayoutDetector implements LayoutDetector, AutoCloseable {
 
         Image djlImage = ImageFactory.getInstance().fromImage(javaImage);
 
+        int imgWidth = javaImage.getWidth();
+        int imgHeight = javaImage.getHeight();
+
         try (var predictor = model.newPredictor()) {
 
             var detectedObjects = predictor.predict(djlImage).items();
 
             detectedObjects.stream()
-                .filter(DetectedObjects.DetectedObject.class::isInstance)
-                .map(DetectedObjects.DetectedObject.class::cast)
-                .forEach(
-                    object -> elements.add(
-                            new LayoutElement(
-                                    object.getProbability(),
-                                    ElementType.fromLabel(object.getClassName()),
-                                    transformToLocalBox(object.getBoundingBox())
+                    .filter(DetectedObjects.DetectedObject.class::isInstance)
+                    .map(DetectedObjects.DetectedObject.class::cast)
+                    .forEach(
+                            object -> elements.add(
+                                    new LayoutElement(
+                                            object.getProbability(),
+                                            ElementType.fromLabel(object.getClassName()),
+                                            transformToLocalBox(object.getBoundingBox(), imgWidth, imgHeight)
+                                    )
                             )
-                    )
-            );
+                    );
         }
 
         return new PageLayout(pageNumber, elements);
@@ -72,12 +76,16 @@ public class YoloLayoutDetector implements LayoutDetector, AutoCloseable {
         }
     }
 
-    private BoundingBox transformToLocalBox(ai.djl.modality.cv.output.BoundingBox box) {
-        var rect   = box.getBounds();
-        var x      = (float) rect.getX();
-        var y      = (float) rect.getY();
-        var width  = (float) rect.getWidth();
-        var height = (float) rect.getHeight();
+    private BoundingBox transformToLocalBox(ai.djl.modality.cv.output.BoundingBox box, int imgWidth, int imgHeight) {
+        var rect = box.getBounds();
+
+        var scaleX = (double) imgWidth / INPUT_SIZE;
+        var scaleY = (double) imgHeight / INPUT_SIZE;
+
+        var x      = (float) (rect.getX() * scaleX);
+        var y      = (float) (rect.getY() * scaleY);
+        var width  = (float) (rect.getWidth() * scaleX);
+        var height = (float) (rect.getHeight() * scaleY);
 
         return new BoundingBox(x, y, width, height);
     }
@@ -90,7 +98,7 @@ public class YoloLayoutDetector implements LayoutDetector, AutoCloseable {
         }
 
         Pipeline pipeline = new Pipeline();
-        pipeline.add(new Resize(640, 640));
+        pipeline.add(new Resize(INPUT_SIZE, INPUT_SIZE));
         pipeline.add(new ToTensor());
 
         return Criteria.builder()
